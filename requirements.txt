@@ -4,3 +4,4 @@ daphne
 mss
 asgiref
 gunicorn
+djangorestframework
