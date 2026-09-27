@@ -1,0 +1,4 @@
+services:
+  web:
+    # ... boshqa sozlamalar ...
+    command: gunicorn --chdir /app my_app.asgi:application --workers 3 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
