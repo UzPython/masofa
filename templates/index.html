@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boshqaruv Paneli (Command Center)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Maxsus scrollbar va dizayn sozlamalari */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 antialiased min-h-screen flex flex-col">
+
+    <!-- Asosiy navigatsiya (Navbar) -->
+    <header class="bg-indigo-600 shadow-md text-white">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 class="text-xl font-bold flex items-center gap-2">
+                <i class="fa-solid fa-terminal"></i> Masofaviy Boshqaruv Paneli
+            </h1>
+            <div class="text-sm bg-indigo-700 px-3 py-1.5 rounded-lg shadow-inner">
+                {% if request.user.is_authenticated %}
+                    Foydalanuvchi: <span class="font-semibold">{{ request.user.username }}</span>
+                {% else %}
+                    Mehmon
+                {% endif %}
+            </div>
+        </div>
+    </header>
+
+    <!-- Kontent qismi -->
+    <main class="max-w-7xl mx-auto px-4 py-8 flex-grow w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- Chap tomon: Buyruq yuborish shakli (Forma) -->
+        <div class="space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit">
+                <h2 class="text-lg font-semibold mb-4 text-slate-700 flex items-center gap-2">
+                    <i class="fa-solid fa-paper-plane text-indigo-600"></i> Yangi buyruq yuborish
+                </h2>
+                <form method="POST" class="space-y-4">
+                    {% csrf_token %}
+                    <!-- Qaysi forma ekanligini bildirish uchun (agar kerak bo'lsa) -->
+                    <input type="hidden" name="form_type" value="command">
+                    <div>
+                        <label for="command_text" class="block text-sm font-medium text-slate-600 mb-1">Buyruq matni:</label>
+                        <textarea name="command_text" id="command_text" rows="4" required
+                            class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono"
+                            placeholder="Masalan: tasklist yoki shutdown /s /t 60"></textarea>
+                    </div>
+                    <button type="submit" 
+                        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-xl transition duration-200 shadow-md flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-play"></i> Buyruqni yuborish
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- O'ng tomon: Jonli Ekran va Buyruqlar tarixi -->
+        <div class="lg:col-span-2 space-y-6">
+            
+            <!-- Kompyuter ekrani (Jonli efir bloki) -->
+            <div class="bg-slate-900 p-4 rounded-2xl shadow-lg w-full text-center">
+                <h2 class="text-white text-lg font-semibold mb-4 flex items-center gap-2 justify-center">
+                    <i class="fa-solid fa-desktop text-emerald-400"></i> Kompyuter ekrani (Jonli efir)
+                </h2>
+                
+                <!-- Ekran tasviri chiqadigan joy -->
+                <div class="relative bg-black rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-slate-700">
+                    <img id="screenStream" src="" alt="Ulanish kutilmoqda..." class="max-w-full max-h-full object-contain">
+                    <div id="statusText" class="absolute text-slate-400 text-sm font-medium">Agent ulanishi kutilmoqda...</div>
+                </div>
+            </div>
+
+            <!-- Buyruqlar tarixi va natijalari jadvali -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-semibold mb-4 text-slate-700 flex items-center gap-2">
+                    <i class="fa-solid fa-history text-indigo-600"></i> Buyruqlar tarixi va natijalari
+                </h2>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider">
+                                <th class="py-3 px-4">Buyruq</th>
+                                <th class="py-3 px-4">Holati</th>
+                                <th class="py-3 px-4">Natija (Output)</th>
+                                <th class="py-3 px-4">Sana</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-sm">
+                            {% for cmd in commands %}
+                            <tr class="hover:bg-slate-50 transition">
+                                <td class="py-3 px-4 font-mono font-medium text-slate-900">{{ cmd.command_text }}</td>
+                                <td class="py-3 px-4">
+                                    {% if cmd.is_executed %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                                            <i class="fa-solid fa-check mr-1"></i> Bajarildi
+                                        </span>
+                                    {% else %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                            <i class="fa-solid fa-clock mr-1"></i> Kutilyapti
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 px-4 font-mono text-xs text-slate-600 max-w-xs truncate">
+                                    {{ cmd.output_result|default:"Natija hali yo'q" }}
+                                </td>
+                                <td class="py-3 px-4 text-slate-500 text-xs whitespace-nowrap">
+                                    {{ cmd.created_at|date:"Y-m-d H:i" }}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-8 text-slate-400">
+                                    <i class="fa-solid fa-folder-open text-3xl mb-2"></i>
+                                    <p>Hozircha hech qanday buyruqlar yo'q.</p>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500 mt-auto">
+        &copy; 2026 Masofaviy Boshqaruv Tizimi. Barcha huquqlar himoyalangan.
+    </footer>
+
+    <!-- WebSocket Jonli Efir JavaScript qismi -->
+    <script>
+        const imgElement = document.getElementById('screenStream');
+        const statusText = document.getElementById('statusText');
+
+        // Django WebSocket URL manzili (ws:// yoki https bo'lsa wss://)
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const wsUrl = wsProtocol + window.location.host + '/ws/screen/';
+
+        const socket = new WebSocket(wsUrl);
+        socket.binaryType = 'arraybuffer';
+
+        socket.onopen = function() {
+            console.log("WebSocket ulandi");
+            statusText.innerText = "Jonli efirga ulanildi, ekran kutilmoqda...";
+        };
+
+        socket.onmessage = function(event) {
+            statusText.style.display = 'none'; // Rasmlar kela boshlagach holat yozuvini yashiramiz
+            
+            // Kelgan baytlarni Blob orqali rasmga aylantiramiz
+            const blob = new Blob([event.data], { type: 'image/jpeg' });
+            const url = URL.createObjectURL(blob);
+            imgElement.src = url;
+            
+            // Xotirani tejash uchun eski rasm URL manzilini tozalaymiz
+            imgElement.onload = () => {
+                URL.revokeObjectURL(url);
+            };
+        };
+
+        socket.onclose = function() {
+            statusText.style.display = 'block';
+            statusText.innerText = "Aloqa uzildi yoki agent o'chiq.";
+        };
+
+        socket.onerror = function(error) {
+            console.error("WebSocket xatoligi: ", error);
+            statusText.style.display = 'block';
+            statusText.innerText = "Ulanishda xatolik yuz berdi.";
+        };
+    </script>
+
+</body>
+</html>
