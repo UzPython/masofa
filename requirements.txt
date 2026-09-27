@@ -1,0 +1,6 @@
+django
+channels
+daphne
+mss
+asgiref
+gunicorn
