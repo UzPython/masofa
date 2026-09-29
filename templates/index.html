@@ -69,52 +69,17 @@
     <!-- Kontent qismi -->
     <main class="max-w-7xl mx-auto px-4 py-8 flex-grow w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-        <!-- Chap tomon: Kompyuter va Buyruq yuborish shakli -->
+        <!-- Chap tomon: ID orqali ulash va boshqarish -->
         <div class="space-y-6">
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit space-y-6">
                 
-                <!-- Kompyuter qo'shish formasi -->
-                <div>
-                    <h2 class="text-lg font-semibold mb-4 text-slate-700 flex items-center gap-2">
-                        <i class="fa-solid fa-desktop text-indigo-600"></i> Kompyuter qo'shish
-                    </h2>
-                    <form method="POST" class="space-y-3">
-                        {% csrf_token %}
-                        <input type="hidden" name="form_type" value="computer">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-600 mb-1">Kompyuter nomi</label>
-                            <input type="text" name="computer_name" required placeholder="PC-07"
-                                class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-600 mb-1">IP manzil (ixtiyoriy)</label>
-                            <input type="text" name="computer_ip" placeholder="192.168.1.77"
-                                class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-600 mb-1">Login</label>
-                            <input type="text" name="computer_username" required placeholder="agentuser"
-                                class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-600 mb-1">Parol</label>
-                            <input type="password" name="computer_password" required placeholder="********"
-                                class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
-                        </div>
-                        <button type="submit"
-                            class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-4 rounded-xl transition duration-200 shadow-md flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-plus"></i> Qo'shish
-                        </button>
-                    </form>
-                </div>
-
-                <hr class="border-slate-200">
-
-                <!-- Yangi buyruq yuborish formasi -->
+                <!-- ID orqali ulash formasi -->
                 <div>
                     <h2 class="text-lg font-semibold mb-4 text-slate-700 flex items-center gap-2">
                         <i class="fa-solid fa-share-nodes text-indigo-600"></i> ID orqali ulash
                     </h2>
+                    <p class="mb-3 text-xs text-slate-500">Ulanganlar: {{ shared_account_count|default:0 }}/{{ max_shared_accounts|default:3 }}</p>
+                    
                     {% if account_id %}
                     <div class="mb-4 rounded-xl border border-indigo-100 bg-indigo-50 p-3">
                         <label class="mb-2 block text-sm font-medium text-slate-600">Mening 20 xonali IDim</label>
@@ -127,12 +92,13 @@
                         <p id="accountIdCopyStatus" class="mt-2 min-h-4 text-xs text-emerald-700" aria-live="polite"></p>
                     </div>
                     {% endif %}
+
                     <form method="POST" class="space-y-3">
                         {% csrf_token %}
                         <input type="hidden" name="form_type" value="share_access">
                         <div>
                             <label class="block text-sm font-medium text-slate-600 mb-1">Ulangan foydalanuvchi nomi</label>
-                            <input type="text" name="share_name" placeholder="Masalan: Ishxonadagi kompyuterlar" maxlength="100" required
+                            <input type="text" name="share_name" placeholder="Masalan: Sherbek" maxlength="100" required
                                 class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
                         </div>
                         <div>
@@ -145,93 +111,49 @@
                             <i class="fa-solid fa-user-plus"></i> Ulash
                         </button>
                     </form>
-                </div>
-
-                <hr class="border-slate-200">
-
-                <div>
-                    <h2 class="text-lg font-semibold mb-4 text-slate-700 flex items-center gap-2">
-                        <i class="fa-solid fa-paper-plane text-indigo-600"></i> Yangi buyruq yuborish
-                    </h2>
-                    <form method="POST" class="space-y-4">
-                        {% csrf_token %}
-                        <input type="hidden" name="form_type" value="command">
-                        <div>
-                            <label for="command_text" class="block text-sm font-medium text-slate-600 mb-1">Buyruq matni:</label>
-                            <textarea name="command_text" id="command_text" rows="4" required
-                                class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-mono"
-                                placeholder="Masalan: tasklist yoki dir"></textarea>
-                        </div>
-                        <button type="submit"
-                            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-xl transition duration-200 shadow-md flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-play"></i> Buyruqni yuborish
-                        </button>
-                    </form>
+                    {% if not can_add_shared_account %}
+                    <p class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                        Ulanish limiti to'ldi. Ko'pi bilan 3 ta akkaunt ulash mumkin.
+                    </p>
+                    {% endif %}
                 </div>
 
             </div>
         </div>
 
-        <!-- O'ng tomon: Kompyuterlar ro'yxati va Jonli ekran -->
+        <!-- O'ng tomon: Ulangan akkauntlar va Jonli ekran -->
         <div class="lg:col-span-2 space-y-6">
 
-            <!-- Kompyuterlar ro'yxati -->
+            <!-- Ulangan akkauntlar va Efirga ulanish -->
             <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                 <div class="flex items-center justify-between mb-4 gap-3">
                     <h2 class="text-lg font-semibold text-slate-700 flex items-center gap-2">
-                        <i class="fa-solid fa-desktop text-indigo-600"></i> Kompyuterlar holati
+                        <i class="fa-solid fa-users text-indigo-600"></i> Ulangan akkauntlar
                     </h2>
-                    <div class="flex items-center gap-3">
-                        <button type="button" id="openAddComputerModal" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-xl shadow-sm transition flex items-center gap-2">
-                            <i class="fa-solid fa-plus"></i> Yana kompyuter qo'shish
-                        </button>
-                        <span class="inline-flex items-center gap-2 rounded-full bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-semibold">
-                            <span class="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            Live
-                        </span>
-                    </div>
+                    <span class="inline-flex items-center gap-2 rounded-full bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-semibold">
+                        <span class="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Live
+                    </span>
                 </div>
 
-                {% if shared_accounts %}
-                <div class="mb-4 border-b border-slate-200 pb-4">
-                    <h3 class="mb-2 text-sm font-semibold text-slate-600">Ulangan akkauntlar</h3>
-                    <div class="flex flex-wrap gap-x-5 gap-y-2">
-                        {% for shared_account in shared_accounts %}
-                        <div class="text-sm">
-                            {% if shared_account.owner.online_owned_computers %}
-                            <button type="button" data-computer="{{ shared_account.owner.online_owned_computers.0.name }}" data-online="true" data-computer-id="{{ shared_account.owner.profile.account_id }}__{{ shared_account.owner.online_owned_computers.0.name }}" class="computer-select font-semibold text-indigo-700 hover:text-indigo-900 hover:underline">
-                                {{ shared_account.display_name }}
-                            </button>
-                            {% else %}
-                            <span class="font-semibold text-slate-500">{{ shared_account.display_name }}</span>
-                            {% endif %}
-                            <button type="button" data-stream-id="user-{{ shared_account.owner.profile.account_id }}" data-stream-name="{{ shared_account.display_name }}" class="shared-screen-select ml-2 font-medium text-emerald-700 hover:text-emerald-900 hover:underline">
-                                Ekranini ko'rish
-                            </button>
-                            <span class="text-slate-500">({{ shared_account.owner.username }})</span>
+                <div class="space-y-3">
+                    {% if shared_accounts %}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {% for shared_account in shared_accounts %}
+                            <div class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3.5">
+                                <div class="text-sm">
+                                    <span class="font-semibold text-slate-800">{{ shared_account.display_name }}</span>
+                                    <span class="text-xs text-slate-500 block">({{ shared_account.owner.username }})</span>
+                                </div>
+                                <button type="button" data-stream-id="user-{{ shared_account.owner.profile.account_id }}" data-stream-name="{{ shared_account.display_name }}" class="shared-screen-select rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3 py-2 transition flex items-center gap-1.5 shadow-sm">
+                                    <i class="fa-solid fa-eye"></i> Ekranini ko'rish
+                                </button>
+                            </div>
+                            {% endfor %}
                         </div>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {% for computer in computers %}
-                    <button type="button" data-computer="{{ computer.name }}" data-online="{{ computer.is_online|yesno:'true,false' }}" data-computer-id="{% if computer.owner_id == user.id %}{{ computer.name }}{% else %}{{ computer.owner.profile.account_id }}__{{ computer.name }}{% endif %}" class="computer-select text-left rounded-2xl border p-4 shadow-sm transition hover:-translate-y-0.5 {% if computer.is_online %}bg-emerald-50 border-emerald-200{% else %}bg-rose-50 border-rose-200{% endif %} {% if not computer.is_online %}cursor-not-allowed opacity-80{% endif %}">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="font-semibold text-slate-800">{{ computer.name }}</span>
-                            <span class="text-[10px] px-2.5 py-1 rounded-full {% if computer.is_online %}bg-emerald-100 text-emerald-700{% else %}bg-rose-100 text-rose-700{% endif %} font-medium">
-                                {% if computer.is_online %}online{% else %}offline{% endif %}
-                            </span>
-                        </div>
-                        <div class="flex items-center justify-between text-xs text-slate-600">
-                            <span>{{ computer.ip_address }}</span>
-                            <span>{{ computer.username }}</span>
-                        </div>
-                    </button>
-                    {% empty %}
-                    <div class="col-span-full text-sm text-slate-500">Hozircha ulangan kompyuterlar mavjud emas.</div>
-                    {% endfor %}
+                    {% else %}
+                        <p class="rounded-xl border border-dashed border-slate-300 px-3 py-4 text-sm text-slate-500">Hali akkaunt ulanmagan.</p>
+                    {% endif %}
                 </div>
             </div>
 
@@ -251,94 +173,8 @@
                 </div>
             </div>
 
-            <!-- Buyruqlar tarixi -->
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <h2 class="text-lg font-semibold mb-4 text-slate-700 flex items-center gap-2">
-                    <i class="fa-solid fa-history text-indigo-600"></i> Buyruqlar tarixi va natijalari
-                </h2>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider">
-                                <th class="py-3 px-4">Buyruq</th>
-                                <th class="py-3 px-4">Holati</th>
-                                <th class="py-3 px-4">Natija (Output)</th>
-                                <th class="py-3 px-4">Sana</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 text-sm">
-                            {% for cmd in commands %}
-                            <tr class="hover:bg-slate-50 transition">
-                                <td class="py-3 px-4 font-mono font-medium text-slate-900">{{ cmd.command_text }}</td>
-                                <td class="py-3 px-4">
-                                    {% if cmd.is_executed %}
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-                                            Bajarildi
-                                        </span>
-                                    {% else %}
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                                            Kutilyapti
-                                        </span>
-                                    {% endif %}
-                                </td>
-                                <td class="py-3 px-4 font-mono text-xs text-slate-600 max-w-xs truncate">
-                                    {{ cmd.output_result|default:"Natija hali yo'q" }}
-                                </td>
-                                <td class="py-3 px-4 text-slate-500 text-xs whitespace-nowrap">
-                                    {{ cmd.created_at|date:"Y-m-d H:i" }}
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="4" class="text-center py-8 text-slate-400">
-                                    Hozircha hech qanday buyruqlar yo'q.
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
         </div>
     </main>
-
-    <div id="computerModal" class="fixed inset-0 bg-slate-900/50 hidden items-center justify-center z-50">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden border border-slate-200">
-            <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-                <h3 class="text-lg font-bold text-slate-800">Yana kompyuter qo'shish</h3>
-                <button type="button" id="closeAddComputerModal" class="text-slate-500 hover:text-slate-700 text-xl leading-none">&times;</button>
-            </div>
-            <form method="POST" class="p-5 space-y-4">
-                {% csrf_token %}
-                <input type="hidden" name="form_type" value="computer">
-                <div>
-                    <label class="block text-sm font-medium text-slate-600 mb-1">Kompyuter nomi</label>
-                    <input type="text" name="computer_name" required placeholder="PC-08"
-                        class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-600 mb-1">IP manzil (ixtiyoriy)</label>
-                    <input type="text" name="computer_ip" placeholder="192.168.1.88"
-                        class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-600 mb-1">Kompyuter login</label>
-                    <input type="text" name="computer_username" required placeholder="agentuser"
-                        class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-600 mb-1">Kompyuter paroli</label>
-                    <input type="password" name="computer_password" required placeholder="********"
-                        class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
-                </div>
-                <button type="submit"
-                    class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-4 rounded-xl transition duration-200 shadow-md flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-floppy-disk"></i> Kompyuterni saqlash
-                </button>
-            </form>
-        </div>
-    </div>
 
     <!-- Footer -->
     <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500 mt-auto">
@@ -346,10 +182,6 @@
     </footer>
 
     <script>
-        const openModalButton = document.getElementById('openAddComputerModal');
-        const closeModalButton = document.getElementById('closeAddComputerModal');
-        const computerModal = document.getElementById('computerModal');
-        const computerButtons = document.querySelectorAll('.computer-select');
         const sharedScreenButtons = document.querySelectorAll('.shared-screen-select');
         const ownScreenButton = document.getElementById('showOwnScreenButton');
         const statusText = document.getElementById('statusText');
@@ -382,22 +214,13 @@
                 statusText.style.display = 'none';
             };
             socket.onclose = function () {
-                statusText.innerText = 'Aloqa uzildi yoki kompyuter o\'chiq.';
+                statusText.innerText = 'Aloqa uzildi yoki foydalanuvchi oflayn.';
                 statusText.style.display = 'block';
             };
             socket.onerror = function () {
                 statusText.innerText = 'Ulanishda xatolik yuz berdi.';
                 statusText.style.display = 'block';
             };
-        }
-
-        function connectToComputer(button) {
-            if (button.dataset.online !== 'true') {
-                statusText.innerText = 'Kompyuter offline. Ekran ko\'rinmaydi.';
-                statusText.style.display = 'block';
-                return;
-            }
-            openScreenViewer(button.dataset.computerId || button.dataset.computer, button.dataset.computer);
         }
 
         function stopOwnScreen() {
@@ -477,49 +300,22 @@
                 const copyStatus = document.getElementById('accountIdCopyStatus');
                 try {
                     await navigator.clipboard.writeText(accountId);
+                    copyStatus.innerText = 'ID nusxalandi!';
+                    setTimeout(() => { copyStatus.innerText = ''; }, 3000);
                 } catch (error) {
-                    const temporaryInput = document.createElement('textarea');
-                    temporaryInput.value = accountId;
-                    temporaryInput.style.position = 'fixed';
-                    temporaryInput.style.opacity = '0';
-                    document.body.appendChild(temporaryInput);
-                    temporaryInput.select();
-                    const copied = document.execCommand('copy');
-                    temporaryInput.remove();
-                    if (!copied) {
-                        copyStatus.innerText = 'ID-ni nusxalab bo\'lmadi.';
-                        return;
-                    }
-                }
-                copyStatus.innerText = 'ID nusxalandi. Uni ulashmoqchi bo\'lgan odamingizga yuboring.';
-            });
-        }
-
-        if (openModalButton) {
-            openModalButton.addEventListener('click', () => {
-                computerModal.classList.remove('hidden');
-                computerModal.classList.add('flex');
-            });
-        }
-
-        if (closeModalButton) {
-            closeModalButton.addEventListener('click', () => {
-                computerModal.classList.add('hidden');
-                computerModal.classList.remove('flex');
-            });
-        }
-
-        if (computerModal) {
-            computerModal.addEventListener('click', (event) => {
-                if (event.target === computerModal) {
-                    computerModal.classList.add('hidden');
-                    computerModal.classList.remove('flex');
+                    copyStatus.innerText = 'Nusxalashda xatolik yuz berdi.';
                 }
             });
         }
+
+        sharedScreenButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                openScreenViewer(button.dataset.streamId, button.dataset.streamName);
+            });
+        });
 
         if (ownScreenButton) {
-            ownScreenButton.addEventListener('click', function () {
+            ownScreenButton.addEventListener('click', () => {
                 if (captureStream) {
                     stopOwnScreen();
                 } else {
@@ -527,19 +323,6 @@
                 }
             });
         }
-
-        sharedScreenButtons.forEach((button) => {
-            button.addEventListener('click', function () {
-                openScreenViewer(this.dataset.streamId, this.dataset.streamName);
-            });
-        });
-
-        computerButtons.forEach((button) => {
-            button.addEventListener('click', function () {
-                connectToComputer(this);
-            });
-        });
     </script>
-
 </body>
 </html>

@@ -10,6 +10,8 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import Command, AllowedSite, SiteWarning, Computer, SharedAccount, UserProfile
 from .serializers import CommandSerializer
 
+MAX_SHARED_ACCOUNTS = 3
+
 
 def ensure_demo_computers():
     default_names = [
@@ -158,6 +160,11 @@ def index_view(request):
                     messages.warning(request, 'Bunday ID ega foydalanuvchi topilmadi.')
                 elif profile.user == request.user:
                     messages.info(request, 'Siz o\'zingizning ID\'ingizni ulay olmaysiz.')
+                elif (
+                    not SharedAccount.objects.filter(owner=profile.user, recipient=request.user).exists()
+                    and SharedAccount.objects.filter(recipient=request.user).count() >= MAX_SHARED_ACCOUNTS
+                ):
+                    messages.warning(request, f'Ko\'pi bilan {MAX_SHARED_ACCOUNTS} ta kompyuter/akkaunt ulash mumkin.')
                 else:
                     SharedAccount.objects.update_or_create(
                         owner=profile.user,
@@ -183,6 +190,7 @@ def index_view(request):
             to_attr='online_owned_computers',
         )
     ).order_by('-created_at')
+    shared_account_count = shared_accounts.count()
     selected_computer = computers.first()
     user_profile = UserProfile.objects.filter(user=request.user).first()
 
@@ -192,6 +200,9 @@ def index_view(request):
         'warnings': warnings,
         'computers': computers,
         'shared_accounts': shared_accounts,
+        'shared_account_count': shared_account_count,
+        'max_shared_accounts': MAX_SHARED_ACCOUNTS,
+        'can_add_shared_account': shared_account_count < MAX_SHARED_ACCOUNTS,
         'selected_computer': selected_computer,
         'user_profile': user_profile,
         'account_id': getattr(user_profile, 'account_id', None),

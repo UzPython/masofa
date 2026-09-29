@@ -190,6 +190,7 @@ class UserAccessIsolationTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-computer-id="PC-Own"')
+        self.assertContains(response, 'id="expandScreenButton"')
 
     def test_sharing_rejects_ids_that_are_not_20_digits(self):
         owner = get_user_model().objects.create_user(username='owner', password='StrongPass123')
@@ -206,6 +207,37 @@ class UserAccessIsolationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(computer.shared_with.filter(pk=recipient.pk).exists())
         self.assertContains(response, 'ID 20 ta raqamdan iborat')
+
+    def test_sharing_is_limited_to_three_accounts(self):
+        recipient = get_user_model().objects.create_user(username='recipient', password='StrongPass123')
+        owners = [
+            get_user_model().objects.create_user(username=f'owner-{index}', password='StrongPass123')
+            for index in range(4)
+        ]
+        self.client.force_login(recipient)
+
+        for owner in owners[:3]:
+            self.client.post(
+                reverse('home'),
+                {
+                    'form_type': 'share_access',
+                    'share_id': owner.profile.account_id,
+                    'share_name': owner.username,
+                },
+            )
+
+        response = self.client.post(
+            reverse('home'),
+            {
+                'form_type': 'share_access',
+                'share_id': owners[3].profile.account_id,
+                'share_name': owners[3].username,
+            },
+            follow=True,
+        )
+
+        self.assertEqual(SharedAccount.objects.filter(recipient=recipient).count(), 3)
+        self.assertContains(response, 'Ulanish limiti to\'ldi')
 
 
 class AuthFlowTests(TestCase):
