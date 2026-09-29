@@ -1,2 +1,0 @@
-# Eskisini o'chirib, o'rniga quyidagicha yozing:
-CMD ["gunicorn", "lamp.wsgi:application", "--bind", "0.0.0.0:8000", "--chdir", "/app"]

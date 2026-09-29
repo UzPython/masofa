@@ -9,7 +9,6 @@
     <!-- FontAwesome Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* Maxsus scrollbar va dizayn sozlamalari */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
@@ -37,65 +36,193 @@
             <h1 class="text-xl font-bold flex items-center gap-2">
                 <i class="fa-solid fa-terminal"></i> Masofaviy Boshqaruv Paneli
             </h1>
-            <div class="text-sm bg-indigo-700 px-3 py-1.5 rounded-lg shadow-inner">
+            <div class="flex items-center gap-3">
+                <div class="text-sm bg-indigo-700 px-3 py-1.5 rounded-lg shadow-inner">
+                    {% if request.user.is_authenticated %}
+                        Foydalanuvchi: <span class="font-semibold">{{ request.user.username }}</span>
+                        {% if account_id %}
+                            <span class="ml-2 bg-white/10 px-2 py-1 rounded-md font-mono text-[11px]">ID: {{ account_id }}</span>
+                        {% endif %}
+                    {% else %}
+                        Mehmon
+                    {% endif %}
+                </div>
                 {% if request.user.is_authenticated %}
-                    Foydalanuvchi: <span class="font-semibold">{{ request.user.username }}</span>
-                {% else %}
-                    Mehmon
+                    <a href="{% url 'logout' %}" class="text-sm bg-white text-indigo-700 hover:bg-slate-100 px-3 py-2 rounded-lg font-semibold transition">
+                        Chiqish
+                    </a>
                 {% endif %}
             </div>
         </div>
     </header>
 
+    {% if messages %}
+        <div class="max-w-7xl mx-auto px-4 pt-6 w-full">
+            {% for message in messages %}
+                <div class="rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-800 px-4 py-3 text-sm shadow-sm">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
     <!-- Kontent qismi -->
     <main class="max-w-7xl mx-auto px-4 py-8 flex-grow w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        <!-- Chap tomon: Buyruq yuborish shakli (Forma) -->
+
+        <!-- Chap tomon: Kompyuter va Buyruq yuborish shakli -->
         <div class="space-y-6">
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit">
-                <h2 class="text-lg font-semibold mb-4 text-slate-700 flex items-center gap-2">
-                    <i class="fa-solid fa-paper-plane text-indigo-600"></i> Yangi buyruq yuborish
-                </h2>
-                <form method="POST" class="space-y-4">
-                    {% csrf_token %}
-                    <!-- Qaysi forma ekanligini bildirish uchun (agar kerak bo'lsa) -->
-                    <input type="hidden" name="form_type" value="command">
-                    <div>
-                        <label for="command_text" class="block text-sm font-medium text-slate-600 mb-1">Buyruq matni:</label>
-                        <textarea name="command_text" id="command_text" rows="4" required
-                            class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono"
-                            placeholder="Masalan: tasklist yoki shutdown /s /t 60"></textarea>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit space-y-6">
+                
+                <!-- Kompyuter qo'shish formasi -->
+                <div>
+                    <h2 class="text-lg font-semibold mb-4 text-slate-700 flex items-center gap-2">
+                        <i class="fa-solid fa-desktop text-indigo-600"></i> Kompyuter qo'shish
+                    </h2>
+                    <form method="POST" class="space-y-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_type" value="computer">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Kompyuter nomi</label>
+                            <input type="text" name="computer_name" required placeholder="PC-07"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">IP manzil (ixtiyoriy)</label>
+                            <input type="text" name="computer_ip" placeholder="192.168.1.77"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Login</label>
+                            <input type="text" name="computer_username" required placeholder="agentuser"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Parol</label>
+                            <input type="password" name="computer_password" required placeholder="********"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                        </div>
+                        <button type="submit"
+                            class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-4 rounded-xl transition duration-200 shadow-md flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-plus"></i> Qo'shish
+                        </button>
+                    </form>
+                </div>
+
+                <hr class="border-slate-200">
+
+                <!-- Yangi buyruq yuborish formasi -->
+                <div>
+                    <h2 class="text-lg font-semibold mb-4 text-slate-700 flex items-center gap-2">
+                        <i class="fa-solid fa-share-nodes text-indigo-600"></i> ID orqali ulash
+                    </h2>
+                    {% if account_id %}
+                    <div class="mb-4 rounded-xl border border-indigo-100 bg-indigo-50 p-3">
+                        <label class="mb-2 block text-sm font-medium text-slate-600">Mening 20 xonali IDim</label>
+                        <div class="flex items-center gap-2">
+                            <code id="accountIdValue" class="min-w-0 flex-1 break-all font-mono text-sm font-semibold text-indigo-800">{{ account_id }}</code>
+                            <button type="button" id="copyAccountId" class="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-700" title="ID-ni nusxalash">
+                                <i class="fa-solid fa-copy"></i> Nusxa olish
+                            </button>
+                        </div>
+                        <p id="accountIdCopyStatus" class="mt-2 min-h-4 text-xs text-emerald-700" aria-live="polite"></p>
                     </div>
-                    <button type="submit" 
-                        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-xl transition duration-200 shadow-md flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-play"></i> Buyruqni yuborish
-                    </button>
-                </form>
+                    {% endif %}
+                    <form method="POST" class="space-y-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_type" value="share_access">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Ulashmoqchi bo'lgan foydalanuvchining IDsi</label>
+                            <input type="text" name="share_id" placeholder="20 xonali ID" inputmode="numeric" minlength="20" maxlength="20" pattern="[0-9]{20}" required title="ID 20 ta raqamdan iborat bo'lishi kerak"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-mono">
+                        </div>
+                        <button type="submit"
+                            class="w-full bg-violet-600 hover:bg-violet-700 text-white font-medium py-2.5 px-4 rounded-xl transition duration-200 shadow-md flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-user-plus"></i> Ulash
+                        </button>
+                    </form>
+                </div>
+
+                <hr class="border-slate-200">
+
+                <div>
+                    <h2 class="text-lg font-semibold mb-4 text-slate-700 flex items-center gap-2">
+                        <i class="fa-solid fa-paper-plane text-indigo-600"></i> Yangi buyruq yuborish
+                    </h2>
+                    <form method="POST" class="space-y-4">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_type" value="command">
+                        <div>
+                            <label for="command_text" class="block text-sm font-medium text-slate-600 mb-1">Buyruq matni:</label>
+                            <textarea name="command_text" id="command_text" rows="4" required
+                                class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-mono"
+                                placeholder="Masalan: tasklist yoki dir"></textarea>
+                        </div>
+                        <button type="submit"
+                            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-xl transition duration-200 shadow-md flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-play"></i> Buyruqni yuborish
+                        </button>
+                    </form>
+                </div>
+
             </div>
         </div>
 
-        <!-- O'ng tomon: Jonli Ekran va Buyruqlar tarixi -->
+        <!-- O'ng tomon: Kompyuterlar ro'yxati va Jonli ekran -->
         <div class="lg:col-span-2 space-y-6">
-            
+
+            <!-- Kompyuterlar ro'yxati -->
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between mb-4 gap-3">
+                    <h2 class="text-lg font-semibold text-slate-700 flex items-center gap-2">
+                        <i class="fa-solid fa-desktop text-indigo-600"></i> Kompyuterlar holati
+                    </h2>
+                    <div class="flex items-center gap-3">
+                        <button type="button" id="openAddComputerModal" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-xl shadow-sm transition flex items-center gap-2">
+                            <i class="fa-solid fa-plus"></i> Yana kompyuter qo'shish
+                        </button>
+                        <span class="inline-flex items-center gap-2 rounded-full bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-semibold">
+                            <span class="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Live
+                        </span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {% for computer in computers %}
+                    <button type="button" data-computer="{{ computer.name }}" data-online="{{ computer.is_online|yesno:'true,false' }}" class="computer-select text-left rounded-2xl border p-4 shadow-sm transition hover:-translate-y-0.5 {% if computer.is_online %}bg-emerald-50 border-emerald-200{% else %}bg-rose-50 border-rose-200{% endif %} {% if not computer.is_online %}cursor-not-allowed opacity-80{% endif %}">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-semibold text-slate-800">{{ computer.name }}</span>
+                            <span class="text-[10px] px-2.5 py-1 rounded-full {% if computer.is_online %}bg-emerald-100 text-emerald-700{% else %}bg-rose-100 text-rose-700{% endif %} font-medium">
+                                {% if computer.is_online %}online{% else %}offline{% endif %}
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs text-slate-600">
+                            <span>{{ computer.ip_address }}</span>
+                            <span>{{ computer.username }}</span>
+                        </div>
+                    </button>
+                    {% empty %}
+                    <div class="col-span-full text-sm text-slate-500">Hozircha ulangan kompyuterlar mavjud emas.</div>
+                    {% endfor %}
+                </div>
+            </div>
+
             <!-- Kompyuter ekrani (Jonli efir bloki) -->
             <div class="bg-slate-900 p-4 rounded-2xl shadow-lg w-full text-center">
                 <h2 class="text-white text-lg font-semibold mb-4 flex items-center gap-2 justify-center">
                     <i class="fa-solid fa-desktop text-emerald-400"></i> Kompyuter ekrani (Jonli efir)
                 </h2>
-                
-                <!-- Ekran tasviri chiqadigan joy -->
                 <div class="relative bg-black rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-slate-700">
-                    <img id="screenStream" src="" alt="Ulanish kutilmoqda..." class="max-w-full max-h-full object-contain">
+                    <img id="screenStream" alt="Ulanish kutilmoqda..." class="max-w-full max-h-full object-contain">
                     <div id="statusText" class="absolute text-slate-400 text-sm font-medium">Agent ulanishi kutilmoqda...</div>
                 </div>
             </div>
 
-            <!-- Buyruqlar tarixi va natijalari jadvali -->
+            <!-- Buyruqlar tarixi -->
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <h2 class="text-lg font-semibold mb-4 text-slate-700 flex items-center gap-2">
                     <i class="fa-solid fa-history text-indigo-600"></i> Buyruqlar tarixi va natijalari
                 </h2>
-
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead>
@@ -113,11 +240,11 @@
                                 <td class="py-3 px-4">
                                     {% if cmd.is_executed %}
                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-                                            <i class="fa-solid fa-check mr-1"></i> Bajarildi
+                                            Bajarildi
                                         </span>
                                     {% else %}
                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                                            <i class="fa-solid fa-clock mr-1"></i> Kutilyapti
+                                            Kutilyapti
                                         </span>
                                     {% endif %}
                                 </td>
@@ -131,8 +258,7 @@
                             {% empty %}
                             <tr>
                                 <td colspan="4" class="text-center py-8 text-slate-400">
-                                    <i class="fa-solid fa-folder-open text-3xl mb-2"></i>
-                                    <p>Hozircha hech qanday buyruqlar yo'q.</p>
+                                    Hozircha hech qanday buyruqlar yo'q.
                                 </td>
                             </tr>
                             {% endfor %}
@@ -142,55 +268,147 @@
             </div>
 
         </div>
-
     </main>
+
+    <div id="computerModal" class="fixed inset-0 bg-slate-900/50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden border border-slate-200">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+                <h3 class="text-lg font-bold text-slate-800">Yana kompyuter qo'shish</h3>
+                <button type="button" id="closeAddComputerModal" class="text-slate-500 hover:text-slate-700 text-xl leading-none">&times;</button>
+            </div>
+            <form method="POST" class="p-5 space-y-4">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="computer">
+                <div>
+                    <label class="block text-sm font-medium text-slate-600 mb-1">Kompyuter nomi</label>
+                    <input type="text" name="computer_name" required placeholder="PC-08"
+                        class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-600 mb-1">IP manzil (ixtiyoriy)</label>
+                    <input type="text" name="computer_ip" placeholder="192.168.1.88"
+                        class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-600 mb-1">Kompyuter login</label>
+                    <input type="text" name="computer_username" required placeholder="agentuser"
+                        class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-600 mb-1">Kompyuter paroli</label>
+                    <input type="password" name="computer_password" required placeholder="********"
+                        class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                </div>
+                <button type="submit"
+                    class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-4 rounded-xl transition duration-200 shadow-md flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-floppy-disk"></i> Kompyuterni saqlash
+                </button>
+            </form>
+        </div>
+    </div>
 
     <!-- Footer -->
     <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500 mt-auto">
         &copy; 2026 Masofaviy Boshqaruv Tizimi. Barcha huquqlar himoyalangan.
     </footer>
 
-    <!-- WebSocket Jonli Efir JavaScript qismi -->
     <script>
-        const imgElement = document.getElementById('screenStream');
+        const openModalButton = document.getElementById('openAddComputerModal');
+        const closeModalButton = document.getElementById('closeAddComputerModal');
+        const computerModal = document.getElementById('computerModal');
+        const computerButtons = document.querySelectorAll('.computer-select');
         const statusText = document.getElementById('statusText');
+        const screenStream = document.getElementById('screenStream');
+        const copyAccountIdButton = document.getElementById('copyAccountId');
+        let socket = null;
 
-        // Django WebSocket URL manzili (ws:// yoki https bo'lsa wss://)
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-        const wsUrl = wsProtocol + window.location.host + '/ws/screen/';
+        if (copyAccountIdButton) {
+            copyAccountIdButton.addEventListener('click', async () => {
+                const accountId = document.getElementById('accountIdValue').innerText.trim();
+                const copyStatus = document.getElementById('accountIdCopyStatus');
+                try {
+                    await navigator.clipboard.writeText(accountId);
+                } catch (error) {
+                    const temporaryInput = document.createElement('textarea');
+                    temporaryInput.value = accountId;
+                    temporaryInput.style.position = 'fixed';
+                    temporaryInput.style.opacity = '0';
+                    document.body.appendChild(temporaryInput);
+                    temporaryInput.select();
+                    const copied = document.execCommand('copy');
+                    temporaryInput.remove();
+                    if (!copied) {
+                        copyStatus.innerText = 'ID-ni nusxalab bo\'lmadi.';
+                        return;
+                    }
+                }
+                copyStatus.innerText = 'ID nusxalandi. Uni ulashmoqchi bo\'lgan odamingizga yuboring.';
+            });
+        }
 
-        const socket = new WebSocket(wsUrl);
-        socket.binaryType = 'arraybuffer';
+        if (openModalButton) {
+            openModalButton.addEventListener('click', () => {
+                computerModal.classList.remove('hidden');
+                computerModal.classList.add('flex');
+            });
+        }
 
-        socket.onopen = function() {
-            console.log("WebSocket ulandi");
-            statusText.innerText = "Jonli efirga ulanildi, ekran kutilmoqda...";
-        };
+        if (closeModalButton) {
+            closeModalButton.addEventListener('click', () => {
+                computerModal.classList.add('hidden');
+                computerModal.classList.remove('flex');
+            });
+        }
 
-        socket.onmessage = function(event) {
-            statusText.style.display = 'none'; // Rasmlar kela boshlagach holat yozuvini yashiramiz
-            
-            // Kelgan baytlarni Blob orqali rasmga aylantiramiz
-            const blob = new Blob([event.data], { type: 'image/jpeg' });
-            const url = URL.createObjectURL(blob);
-            imgElement.src = url;
-            
-            // Xotirani tejash uchun eski rasm URL manzilini tozalaymiz
-            imgElement.onload = () => {
-                URL.revokeObjectURL(url);
-            };
-        };
+        if (computerModal) {
+            computerModal.addEventListener('click', (event) => {
+                if (event.target === computerModal) {
+                    computerModal.classList.add('hidden');
+                    computerModal.classList.remove('flex');
+                }
+            });
+        }
 
-        socket.onclose = function() {
-            statusText.style.display = 'block';
-            statusText.innerText = "Aloqa uzildi yoki agent o'chiq.";
-        };
+        computerButtons.forEach((button) => {
+            button.addEventListener('click', function () {
+                const online = this.dataset.online === 'true';
+                if (!online) {
+                    statusText.innerText = 'Kompyuter offline. Ekran ko\'rinmaydi.';
+                    statusText.style.display = 'block';
+                    return;
+                }
 
-        socket.onerror = function(error) {
-            console.error("WebSocket xatoligi: ", error);
-            statusText.style.display = 'block';
-            statusText.innerText = "Ulanishda xatolik yuz berdi.";
-        };
+                const computerName = this.dataset.computer;
+                if (socket) socket.close();
+
+                const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+                const wsUrl = wsProtocol + window.location.host + '/ws/screen/' + encodeURIComponent(computerName) + '/?role=viewer';
+
+                socket = new WebSocket(wsUrl);
+                socket.binaryType = 'blob';
+                socket.onopen = function () {
+                    statusText.innerText = 'Jonli efirga ulanildi: ' + computerName;
+                    statusText.style.display = 'block';
+                };
+                socket.onmessage = function (event) {
+                    const blob = event.data instanceof Blob ? event.data : new Blob([event.data], { type: 'image/jpeg' });
+                    const url = URL.createObjectURL(blob);
+                    screenStream.onload = function () {
+                        URL.revokeObjectURL(url);
+                    };
+                    screenStream.src = url;
+                    statusText.style.display = 'none';
+                };
+                socket.onclose = function () {
+                    statusText.innerText = 'Aloqa uzildi yoki kompyuter o\'chiq.';
+                    statusText.style.display = 'block';
+                };
+                socket.onerror = function () {
+                    statusText.innerText = 'Ulanishda xatolik yuz berdi.';
+                    statusText.style.display = 'block';
+                };
+            });
+        });
     </script>
 
 </body>

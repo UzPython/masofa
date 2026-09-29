@@ -1,6 +1,6 @@
-from django.urls import path
+from django.urls import re_path
 from .consumers import ScreenConsumer
 
 websocket_urlpatterns = [
-    path('ws/screen/', ScreenConsumer.as_asgi()),
+    re_path(r'^ws/screen/(?P<agent_id>[^/]+)/?$', ScreenConsumer.as_asgi()),
 ]

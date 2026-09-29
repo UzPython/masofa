@@ -5,3 +5,7 @@ mss
 asgiref
 gunicorn
 djangorestframework
+Pillow
+websocket-client
+websockets
+pyautogui

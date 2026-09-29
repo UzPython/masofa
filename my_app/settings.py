@@ -38,9 +38,12 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'lamp',
-    'rest_framework'
+    'rest_framework',
+    'channels',
 ]
-ASGI_APPLICATION = 'lamp.asgi.application' #
+# ASGI_APPLICATION = 'my_app.asgi.application'
+
+ASGI_APPLICATION = 'my_app.asgi.application'
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -130,8 +133,10 @@ MAILERS = {
 
 
 # InMemoryChannelLayer (oddiy loyihalar va lokal testlar uchun eng osoni)
+
+
 CHANNEL_LAYERS = {
     "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer"
-    }
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    },
 }

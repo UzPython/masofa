@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Akkaunt yaratish</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #111827 0%, #312e81 50%, #7c3aed 100%);
+            font-family: Arial, sans-serif;
+            color: #e2e8f0;
+        }
+        .auth-box {
+            width: min(92vw, 440px);
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-radius: 22px;
+            padding: 34px 28px;
+            box-shadow: 0 25px 60px rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(8px);
+        }
+        .auth-box h1 {
+            margin: 0 0 10px;
+            text-align: center;
+            font-size: 2rem;
+            color: #f8fafc;
+        }
+        .auth-box p {
+            margin: 0 0 25px;
+            text-align: center;
+            color: #cbd5e1;
+            font-size: 0.95rem;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #e2e8f0;
+            font-size: 0.9rem;
+        }
+        input {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.5);
+            background: rgba(15, 23, 42, 0.7);
+            color: #f8fafc;
+            font-size: 1rem;
+            outline: none;
+        }
+        input:focus {
+            border-color: #c4b5fd;
+            box-shadow: 0 0 0 3px rgba(196, 181, 253, 0.2);
+        }
+        button {
+            border: none;
+            cursor: pointer;
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            color: white;
+            font-size: 1rem;
+            font-weight: 700;
+            padding: 14px 16px;
+            border-radius: 12px;
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+            box-shadow: 0 12px 25px rgba(124, 58, 237, 0.25);
+        }
+        button:hover {
+            transform: translateY(-1px);
+        }
+        .helper {
+            margin-top: 18px;
+            text-align: center;
+            font-size: 0.92rem;
+            color: #cbd5e1;
+        }
+        .helper a {
+            color: #c4b5fd;
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .errorlist {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 10px;
+            color: #fca5a5;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-box">
+        <h1>Akkaunt yaratish</h1>
+        <p>Saytdan foydalanishdan oldin yangi akkaunt oching</p>
+
+        <form method="post" novalidate>
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+                <ul class="errorlist">
+                    {% for error in form.non_field_errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            <div>
+                <label for="id_username">Username</label>
+                {{ form.username }}
+                {% if form.username.errors %}
+                    <ul class="errorlist">{% for error in form.username.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                {% endif %}
+            </div>
+
+            <div>
+                <label for="id_password1">Parol</label>
+                {{ form.password1 }}
+                {% if form.password1.errors %}
+                    <ul class="errorlist">{% for error in form.password1.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                {% endif %}
+            </div>
+
+            <div>
+                <label for="id_password2">Parolni tasdiqlang</label>
+                {{ form.password2 }}
+                {% if form.password2.errors %}
+                    <ul class="errorlist">{% for error in form.password2.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                {% endif %}
+            </div>
+
+            <button type="submit">Akkaunt yaratish</button>
+        </form>
+
+        <div class="helper">
+            Allaqachon akkauntingiz bormi? <a href="{% url 'login' %}">Kirish</a>
+        </div>
+    </div>
+</body>
+</html>

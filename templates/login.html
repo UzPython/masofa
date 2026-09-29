@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kirish</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 45%, #60a5fa 100%);
+            font-family: Arial, sans-serif;
+            color: #e2e8f0;
+        }
+        .auth-box {
+            width: min(92vw, 420px);
+            background: rgba(15, 23, 42, 0.78);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-radius: 22px;
+            padding: 34px 28px;
+            box-shadow: 0 25px 60px rgba(15, 23, 42, 0.5);
+            backdrop-filter: blur(8px);
+        }
+        .auth-box h1 {
+            margin: 0 0 10px;
+            text-align: center;
+            font-size: 2rem;
+            color: #f8fafc;
+        }
+        .auth-box p {
+            margin: 0 0 25px;
+            color: #cbd5e1;
+            text-align: center;
+            font-size: 0.95rem;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #e2e8f0;
+            font-size: 0.9rem;
+        }
+        /* Django yaratadigan inputlarga ham to'g'ridan-to'g'ri ta'sir qiladi */
+        input[type="text"],
+        input[type="password"],
+        input[type="email"] {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.5);
+            background: rgba(15, 23, 42, 0.7);
+            color: #f8fafc;
+            font-size: 1rem;
+            outline: none;
+        }
+        input:focus {
+            border-color: #7dd3fc;
+            box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.2);
+        }
+        button {
+            border: none;
+            cursor: pointer;
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 700;
+            padding: 14px 16px;
+            border-radius: 12px;
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+            box-shadow: 0 12px 25px rgba(34, 197, 94, 0.28);
+        }
+        button:hover {
+            transform: translateY(-1px);
+        }
+        .helper {
+            margin-top: 18px;
+            text-align: center;
+            font-size: 0.92rem;
+            color: #cbd5e1;
+        }
+        .helper a {
+            color: #7dd3fc;
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .errorlist {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 10px;
+            color: #fca5a5;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-box">
+        <h1>Kirish</h1>
+        <p>Saytga kirish uchun login va parolni kiriting</p>
+
+        <form method="post" novalidate>
+            {% csrf_token %}
+            
+            {% if form.non_field_errors %}
+                <ul class="errorlist">
+                    {% for error in form.non_field_errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            <div>
+                <label for="id_username">Username</label>
+                {{ form.username }}
+                {% if form.username.errors %}
+                    <ul class="errorlist">
+                        {% for error in form.username.errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+
+            <div>
+                <label for="id_password">Parol</label>
+                {{ form.password }}
+                {% if form.password.errors %}
+                    <ul class="errorlist">
+                        {% for error in form.error_list %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                        {% for error in form.password.errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+
+            <button type="submit">Kirish</button>
+        </form>
+
+        <div class="helper">
+            Akkount yo'qmi? <a href="{% url 'register' %}">Yaratish</a>
+        </div>
+        <div class="helper" style="margin-top: 8px;">
+            Admin akkaunt yo'qmi? <a href="{% url 'admin_create' %}">Admin yaratish</a>
+        </div>
+    </div>
+</body>
+</html>
