@@ -6,7 +6,7 @@ from urllib.parse import parse_qs
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 
-from lamp.models import Computer
+from lamp.models import Computer, UserProfile
 
 
 VIEWERS_BY_AGENT = defaultdict(set)
@@ -25,19 +25,53 @@ def normalize_agent_id(agent_id):
     return value[:99]
 
 
+def extract_agent_identity(agent_id):
+    value = normalize_agent_id(agent_id)
+    if '__' not in value:
+        return None, value
+
+    owner_id, _, computer_name = value.rpartition('__')
+    if owner_id.isdigit() and computer_name:
+        return int(owner_id), computer_name
+    return None, value
+
+
+def resolve_owner_id(owner_key):
+    if owner_key is None:
+        return None
+
+    account_owner_id = UserProfile.objects.filter(account_id=str(owner_key)).values_list('user_id', flat=True).first()
+    if account_owner_id is not None:
+        return account_owner_id
+    if len(str(owner_key)) == 20:
+        return None
+    return owner_key
+
+
 class ScreenConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _register_agent(self):
-        computer = Computer.objects.filter(name=self.agent_id).order_by('pk').first()
+        owner_key, computer_name = extract_agent_identity(self.agent_id)
+        owner_id = resolve_owner_id(owner_key)
+        if owner_key is not None and owner_id is None:
+            return False
+        queryset = Computer.objects.filter(name=computer_name)
+        if owner_id is not None:
+            queryset = queryset.filter(owner_id=owner_id)
+
+        computer = queryset.order_by('pk').first()
         if computer is None:
             computer = Computer.objects.create(
-                name=self.agent_id,
+                name=computer_name,
+                owner_id=owner_id,
                 ip_address='127.0.0.1',
                 username=self.username or 'agent',
                 password=self.password or 'agent123',
                 is_online=True,
                 status_text='Online',
             )
+        if owner_id is not None:
+            computer.owner_id = owner_id
         if self.username:
             computer.username = self.username
         if self.password:
@@ -45,10 +79,18 @@ class ScreenConsumer(AsyncWebsocketConsumer):
         computer.is_online = True
         computer.status_text = 'Online'
         computer.save()
+        return True
 
     @database_sync_to_async
     def _mark_agent_offline(self):
-        Computer.objects.filter(name=self.agent_id).update(
+        owner_key, computer_name = extract_agent_identity(self.agent_id)
+        owner_id = resolve_owner_id(owner_key)
+        if owner_key is not None and owner_id is None:
+            return
+        queryset = Computer.objects.filter(name=computer_name)
+        if owner_id is not None:
+            queryset = queryset.filter(owner_id=owner_id)
+        queryset.update(
             is_online=False,
             status_text='Offline',
         )
@@ -61,12 +103,18 @@ class ScreenConsumer(AsyncWebsocketConsumer):
         self.password = query_params.get('password', [''])[0]
 
         if self.role == "agent":
-            await self._register_agent()
+            if not await self._register_agent():
+                await self.close(code=4404)
+                return
             await self.accept()
             return
 
         if self.role == "viewer":
             VIEWERS_BY_AGENT[self.agent_id].add(self.channel_name)
+            await self.accept()
+            return
+
+        if self.role == "publisher":
             await self.accept()
             return
 
@@ -83,7 +131,7 @@ class ScreenConsumer(AsyncWebsocketConsumer):
                 VIEWERS_BY_AGENT.pop(self.agent_id, None)
 
     async def receive(self, text_data=None, bytes_data=None):
-        if self.role != "agent" or not bytes_data:
+        if self.role not in {"agent", "publisher"} or not bytes_data:
             return
 
         viewers = list(VIEWERS_BY_AGENT.get(self.agent_id, set()))

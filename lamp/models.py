@@ -27,6 +27,21 @@ class UserProfile(models.Model):
                 return cls.objects.create(user=user, account_id=account_id)
 
 
+class SharedAccount(models.Model):
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='outgoing_shares')
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='incoming_shares')
+    display_name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=('owner', 'recipient'), name='unique_shared_account_pair'),
+        ]
+
+    def __str__(self):
+        return self.display_name
+
+
 @receiver(post_save, sender=User)
 def ensure_user_profile(sender, instance, created, **kwargs):
     if created:

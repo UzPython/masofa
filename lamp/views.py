@@ -2,12 +2,12 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.shortcuts import render, redirect, get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from .models import Command, AllowedSite, SiteWarning, Computer, UserProfile
+from .models import Command, AllowedSite, SiteWarning, Computer, SharedAccount, UserProfile
 from .serializers import CommandSerializer
 
 
@@ -143,7 +143,12 @@ def index_view(request):
                     computer.save(update_fields=['ip_address', 'username', 'password', 'is_online', 'status_text'])
         elif form_type == "share_access":
             share_id = (request.POST.get("share_id") or "").strip()
-            if not share_id:
+            share_name = (request.POST.get("share_name") or "").strip()
+            if not share_name:
+                messages.warning(request, 'Ulangan foydalanuvchi uchun nom kiriting.')
+            elif len(share_name) > 100:
+                messages.warning(request, 'Nom 100 ta belgidan oshmasligi kerak.')
+            elif not share_id:
                 messages.warning(request, 'ID kiritilmadi.')
             elif len(share_id) != 20 or not share_id.isdigit():
                 messages.warning(request, 'ID 20 ta raqamdan iborat bo\'lishi kerak.')
@@ -154,9 +159,14 @@ def index_view(request):
                 elif profile.user == request.user:
                     messages.info(request, 'Siz o\'zingizning ID\'ingizni ulay olmaysiz.')
                 else:
+                    SharedAccount.objects.update_or_create(
+                        owner=profile.user,
+                        recipient=request.user,
+                        defaults={'display_name': share_name},
+                    )
                     for computer in Computer.objects.filter(owner=profile.user):
                         computer.shared_with.add(request.user)
-                    messages.success(request, f'Kirish ruxsatlari berildi: {profile.user.username}')
+                    messages.success(request, f'Kirish ruxsatlari berildi: {share_name}')
 
         return redirect('home')
 
@@ -166,6 +176,13 @@ def index_view(request):
     allowed_sites = AllowedSite.objects.all().order_by('-created_at')
     warnings = SiteWarning.objects.all().order_by('-timestamp')
     computers = Computer.objects.filter(Q(owner=request.user) | Q(shared_with=request.user)).distinct().order_by('name')
+    shared_accounts = SharedAccount.objects.filter(recipient=request.user).select_related('owner').prefetch_related(
+        Prefetch(
+            'owner__owned_computers',
+            queryset=Computer.objects.filter(is_online=True).order_by('name', 'pk'),
+            to_attr='online_owned_computers',
+        )
+    ).order_by('-created_at')
     selected_computer = computers.first()
     user_profile = UserProfile.objects.filter(user=request.user).first()
 
@@ -174,6 +191,7 @@ def index_view(request):
         'allowed_sites': allowed_sites,
         'warnings': warnings,
         'computers': computers,
+        'shared_accounts': shared_accounts,
         'selected_computer': selected_computer,
         'user_profile': user_profile,
         'account_id': getattr(user_profile, 'account_id', None),

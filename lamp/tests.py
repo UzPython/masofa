@@ -10,7 +10,7 @@ from channels.testing import WebsocketCommunicator
 from agent import build_ws_url
 from my_app.consumers import normalize_agent_id
 from my_app.routing import websocket_urlpatterns
-from .models import Computer
+from .models import Computer, SharedAccount, UserProfile
 
 
 class AgentIdValidationTests(TestCase):
@@ -53,8 +53,33 @@ class AgentStreamConfigTests(TestCase):
             'ws://127.0.0.1:8000/ws/screen/PC-05/?role=agent&username=agentuser&password=secret123',
         )
 
+    def test_build_ws_url_uses_account_id_for_shared_computer(self):
+        self.assertEqual(
+            build_ws_url('PC-07', owner_id=19863799005458003971),
+            'ws://127.0.0.1:8000/ws/screen/19863799005458003971__PC-07/?role=agent',
+        )
+
 
 class AgentWebsocketConnectionTests(TransactionTestCase):
+    async def test_agent_streams_to_viewer_using_owner_account_id(self):
+        owner = await get_user_model().objects.acreate(username='account-owner', password='StrongPass123')
+        profile = await UserProfile.objects.aget(user=owner)
+        machine = await Computer.objects.acreate(owner=owner, name='PC-Account', is_online=False)
+        stream_path = f'/ws/screen/{profile.account_id}__PC-Account/'
+        viewer = WebsocketCommunicator(URLRouter(websocket_urlpatterns), stream_path + '?role=viewer')
+        agent = WebsocketCommunicator(URLRouter(websocket_urlpatterns), stream_path + '?role=agent')
+
+        viewer_connected, _ = await viewer.connect()
+        agent_connected, _ = await agent.connect()
+
+        self.assertTrue(viewer_connected)
+        self.assertTrue(agent_connected)
+        self.assertTrue(await Computer.objects.filter(pk=machine.pk, is_online=True).aexists())
+        await agent.send_to(bytes_data=b'account-screen-frame')
+        self.assertEqual(await viewer.receive_from(), b'account-screen-frame')
+        await agent.disconnect()
+        await viewer.disconnect()
+
     async def test_agent_connects_when_computer_names_are_duplicated(self):
         await Computer.objects.acreate(name='123')
         await Computer.objects.acreate(name='123')
@@ -67,6 +92,46 @@ class AgentWebsocketConnectionTests(TransactionTestCase):
 
         self.assertTrue(connected)
         await communicator.disconnect()
+
+    async def test_agent_connects_to_the_correct_owner_when_names_are_duplicated(self):
+        owner = await get_user_model().objects.acreate(username='owner', password='StrongPass123')
+        recipient = await get_user_model().objects.acreate(username='recipient', password='StrongPass123')
+        owner_machine = await Computer.objects.acreate(owner=owner, name='123', is_online=False)
+        await Computer.objects.acreate(owner=recipient, name='123', is_online=False)
+
+        communicator = WebsocketCommunicator(
+            URLRouter(websocket_urlpatterns),
+            f'/ws/screen/{owner.id}__123/?role=agent',
+        )
+
+        connected, _ = await communicator.connect()
+
+        self.assertTrue(connected)
+        updated_machine = await Computer.objects.aget(pk=owner_machine.pk)
+        self.assertTrue(updated_machine.is_online)
+        self.assertFalse(await Computer.objects.filter(owner=recipient, name='123', is_online=True).aexists())
+        await communicator.disconnect()
+
+    async def test_browser_publisher_streams_frames_to_viewer(self):
+        stream_key = 'user-12345678901234567890'
+        viewer = WebsocketCommunicator(
+            URLRouter(websocket_urlpatterns),
+            f'/ws/screen/{stream_key}/?role=viewer',
+        )
+        publisher = WebsocketCommunicator(
+            URLRouter(websocket_urlpatterns),
+            f'/ws/screen/{stream_key}/?role=publisher',
+        )
+
+        viewer_connected, _ = await viewer.connect()
+        publisher_connected, _ = await publisher.connect()
+
+        self.assertTrue(viewer_connected)
+        self.assertTrue(publisher_connected)
+        await publisher.send_to(bytes_data=b'jpeg-frame')
+        self.assertEqual(await viewer.receive_from(), b'jpeg-frame')
+        await publisher.disconnect()
+        await viewer.disconnect()
 
 
 class UserAccessIsolationTests(TestCase):
@@ -95,14 +160,36 @@ class UserAccessIsolationTests(TestCase):
 
         response = self.client.post(
             reverse('home'),
-            {'form_type': 'share_access', 'share_id': owner.profile.account_id},
+            {
+                'form_type': 'share_access',
+                'share_id': owner.profile.account_id,
+                'share_name': 'Ishxonadagi kompyuterlar',
+            },
             follow=True,
         )
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(computer.shared_with.filter(pk=recipient.pk).exists())
+        self.assertEqual(
+            SharedAccount.objects.get(owner=owner, recipient=recipient).display_name,
+            'Ishxonadagi kompyuterlar',
+        )
         self.assertContains(response, 'data-computer="PC-Shared"')
+        self.assertContains(response, 'data-computer="PC-Shared" data-online="true"')
+        self.assertContains(response, 'data-computer-id="' + owner.profile.account_id + '__PC-Shared"')
+        self.assertContains(response, 'data-stream-id="user-' + owner.profile.account_id + '"')
+        self.assertContains(response, 'Ishxonadagi kompyuterlar')
         self.assertContains(response, 'id="copyAccountId"')
+
+    def test_own_computer_uses_plain_name_for_live_stream_key(self):
+        owner = get_user_model().objects.create_user(username='owner', password='StrongPass123')
+        Computer.objects.create(owner=owner, name='PC-Own', is_online=True)
+        self.client.force_login(owner)
+
+        response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-computer-id="PC-Own"')
 
     def test_sharing_rejects_ids_that_are_not_20_digits(self):
         owner = get_user_model().objects.create_user(username='owner', password='StrongPass123')
@@ -112,7 +199,7 @@ class UserAccessIsolationTests(TestCase):
 
         response = self.client.post(
             reverse('home'),
-            {'form_type': 'share_access', 'share_id': '123'},
+            {'form_type': 'share_access', 'share_id': '123', 'share_name': 'Noto\'g\'ri ID'},
             follow=True,
         )
 

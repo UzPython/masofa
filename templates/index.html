@@ -131,6 +131,11 @@
                         {% csrf_token %}
                         <input type="hidden" name="form_type" value="share_access">
                         <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Ulangan foydalanuvchi nomi</label>
+                            <input type="text" name="share_name" placeholder="Masalan: Ishxonadagi kompyuterlar" maxlength="100" required
+                                class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                        </div>
+                        <div>
                             <label class="block text-sm font-medium text-slate-600 mb-1">Ulashmoqchi bo'lgan foydalanuvchining IDsi</label>
                             <input type="text" name="share_id" placeholder="20 xonali ID" inputmode="numeric" minlength="20" maxlength="20" pattern="[0-9]{20}" required title="ID 20 ta raqamdan iborat bo'lishi kerak"
                                 class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-mono">
@@ -187,9 +192,32 @@
                     </div>
                 </div>
 
+                {% if shared_accounts %}
+                <div class="mb-4 border-b border-slate-200 pb-4">
+                    <h3 class="mb-2 text-sm font-semibold text-slate-600">Ulangan akkauntlar</h3>
+                    <div class="flex flex-wrap gap-x-5 gap-y-2">
+                        {% for shared_account in shared_accounts %}
+                        <div class="text-sm">
+                            {% if shared_account.owner.online_owned_computers %}
+                            <button type="button" data-computer="{{ shared_account.owner.online_owned_computers.0.name }}" data-online="true" data-computer-id="{{ shared_account.owner.profile.account_id }}__{{ shared_account.owner.online_owned_computers.0.name }}" class="computer-select font-semibold text-indigo-700 hover:text-indigo-900 hover:underline">
+                                {{ shared_account.display_name }}
+                            </button>
+                            {% else %}
+                            <span class="font-semibold text-slate-500">{{ shared_account.display_name }}</span>
+                            {% endif %}
+                            <button type="button" data-stream-id="user-{{ shared_account.owner.profile.account_id }}" data-stream-name="{{ shared_account.display_name }}" class="shared-screen-select ml-2 font-medium text-emerald-700 hover:text-emerald-900 hover:underline">
+                                Ekranini ko'rish
+                            </button>
+                            <span class="text-slate-500">({{ shared_account.owner.username }})</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {% for computer in computers %}
-                    <button type="button" data-computer="{{ computer.name }}" data-online="{{ computer.is_online|yesno:'true,false' }}" class="computer-select text-left rounded-2xl border p-4 shadow-sm transition hover:-translate-y-0.5 {% if computer.is_online %}bg-emerald-50 border-emerald-200{% else %}bg-rose-50 border-rose-200{% endif %} {% if not computer.is_online %}cursor-not-allowed opacity-80{% endif %}">
+                    <button type="button" data-computer="{{ computer.name }}" data-online="{{ computer.is_online|yesno:'true,false' }}" data-computer-id="{% if computer.owner_id == user.id %}{{ computer.name }}{% else %}{{ computer.owner.profile.account_id }}__{{ computer.name }}{% endif %}" class="computer-select text-left rounded-2xl border p-4 shadow-sm transition hover:-translate-y-0.5 {% if computer.is_online %}bg-emerald-50 border-emerald-200{% else %}bg-rose-50 border-rose-200{% endif %} {% if not computer.is_online %}cursor-not-allowed opacity-80{% endif %}">
                         <div class="flex items-center justify-between mb-2">
                             <span class="font-semibold text-slate-800">{{ computer.name }}</span>
                             <span class="text-[10px] px-2.5 py-1 rounded-full {% if computer.is_online %}bg-emerald-100 text-emerald-700{% else %}bg-rose-100 text-rose-700{% endif %} font-medium">
@@ -209,6 +237,11 @@
 
             <!-- Kompyuter ekrani (Jonli efir bloki) -->
             <div class="bg-slate-900 p-4 rounded-2xl shadow-lg w-full text-center">
+                <div class="mb-4 flex justify-center">
+                    <button type="button" id="showOwnScreenButton" data-stream-id="user-{{ account_id }}" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/60 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20">
+                        <i class="fa-solid fa-user text-xs"></i> Mening ekranim
+                    </button>
+                </div>
                 <h2 class="text-white text-lg font-semibold mb-4 flex items-center gap-2 justify-center">
                     <i class="fa-solid fa-desktop text-emerald-400"></i> Kompyuter ekrani (Jonli efir)
                 </h2>
@@ -317,10 +350,126 @@
         const closeModalButton = document.getElementById('closeAddComputerModal');
         const computerModal = document.getElementById('computerModal');
         const computerButtons = document.querySelectorAll('.computer-select');
+        const sharedScreenButtons = document.querySelectorAll('.shared-screen-select');
+        const ownScreenButton = document.getElementById('showOwnScreenButton');
         const statusText = document.getElementById('statusText');
         const screenStream = document.getElementById('screenStream');
         const copyAccountIdButton = document.getElementById('copyAccountId');
         let socket = null;
+        let publisherSocket = null;
+        let captureStream = null;
+        let frameTimer = null;
+
+        function openScreenViewer(streamKey, streamName) {
+            if (socket) socket.close();
+
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            const wsUrl = wsProtocol + window.location.host + '/ws/screen/' + encodeURIComponent(streamKey) + '/?role=viewer';
+
+            socket = new WebSocket(wsUrl);
+            socket.binaryType = 'blob';
+            socket.onopen = function () {
+                statusText.innerText = 'Jonli efirga ulanildi: ' + streamName;
+                statusText.style.display = 'block';
+            };
+            socket.onmessage = function (event) {
+                const blob = event.data instanceof Blob ? event.data : new Blob([event.data], { type: 'image/jpeg' });
+                const url = URL.createObjectURL(blob);
+                screenStream.onload = function () {
+                    URL.revokeObjectURL(url);
+                };
+                screenStream.src = url;
+                statusText.style.display = 'none';
+            };
+            socket.onclose = function () {
+                statusText.innerText = 'Aloqa uzildi yoki kompyuter o\'chiq.';
+                statusText.style.display = 'block';
+            };
+            socket.onerror = function () {
+                statusText.innerText = 'Ulanishda xatolik yuz berdi.';
+                statusText.style.display = 'block';
+            };
+        }
+
+        function connectToComputer(button) {
+            if (button.dataset.online !== 'true') {
+                statusText.innerText = 'Kompyuter offline. Ekran ko\'rinmaydi.';
+                statusText.style.display = 'block';
+                return;
+            }
+            openScreenViewer(button.dataset.computerId || button.dataset.computer, button.dataset.computer);
+        }
+
+        function stopOwnScreen() {
+            if (frameTimer) {
+                clearInterval(frameTimer);
+                frameTimer = null;
+            }
+            if (captureStream) {
+                captureStream.getTracks().forEach((track) => track.stop());
+                captureStream = null;
+            }
+            if (publisherSocket) {
+                publisherSocket.close();
+                publisherSocket = null;
+            }
+            ownScreenButton.innerHTML = '<i class="fa-solid fa-user text-xs"></i> Mening ekranim';
+            statusText.innerText = 'Efir to\'xtatildi.';
+            statusText.style.display = 'block';
+        }
+
+        async function startOwnScreen() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                statusText.innerText = 'Brauzeringiz ekran ulashishni qo\'llab-quvvatlamaydi.';
+                statusText.style.display = 'block';
+                return;
+            }
+
+            try {
+                captureStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+                const video = document.createElement('video');
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                video.srcObject = captureStream;
+                video.muted = true;
+                await video.play();
+
+                const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+                const wsUrl = wsProtocol + window.location.host + '/ws/screen/' + encodeURIComponent(ownScreenButton.dataset.streamId) + '/?role=publisher';
+                publisherSocket = new WebSocket(wsUrl);
+                await new Promise((resolve, reject) => {
+                    publisherSocket.onopen = resolve;
+                    publisherSocket.onerror = reject;
+                });
+
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                openScreenViewer(ownScreenButton.dataset.streamId, 'Mening ekranim');
+                let framePending = false;
+                frameTimer = setInterval(() => {
+                    if (publisherSocket.readyState !== WebSocket.OPEN || framePending || !video.videoWidth) return;
+                    framePending = true;
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    canvas.toBlob((blob) => {
+                        framePending = false;
+                        if (blob && publisherSocket && publisherSocket.readyState === WebSocket.OPEN) {
+                            publisherSocket.send(blob);
+                        }
+                    }, 'image/jpeg', 0.65);
+                }, 100);
+
+                ownScreenButton.innerHTML = '<i class="fa-solid fa-stop text-xs"></i> Efirni to\'xtatish';
+                statusText.innerText = 'Ekraningiz jonli efirda uzatilmoqda.';
+                statusText.style.display = 'block';
+                captureStream.getVideoTracks()[0].addEventListener('ended', stopOwnScreen, { once: true });
+            } catch (error) {
+                stopOwnScreen();
+                statusText.innerText = error.name === 'NotAllowedError'
+                    ? 'Ekran ulashishga ruxsat berilmadi.'
+                    : 'Ekran efirini boshlashda xatolik yuz berdi.';
+                statusText.style.display = 'block';
+            }
+        }
 
         if (copyAccountIdButton) {
             copyAccountIdButton.addEventListener('click', async () => {
@@ -369,44 +518,25 @@
             });
         }
 
+        if (ownScreenButton) {
+            ownScreenButton.addEventListener('click', function () {
+                if (captureStream) {
+                    stopOwnScreen();
+                } else {
+                    startOwnScreen();
+                }
+            });
+        }
+
+        sharedScreenButtons.forEach((button) => {
+            button.addEventListener('click', function () {
+                openScreenViewer(this.dataset.streamId, this.dataset.streamName);
+            });
+        });
+
         computerButtons.forEach((button) => {
             button.addEventListener('click', function () {
-                const online = this.dataset.online === 'true';
-                if (!online) {
-                    statusText.innerText = 'Kompyuter offline. Ekran ko\'rinmaydi.';
-                    statusText.style.display = 'block';
-                    return;
-                }
-
-                const computerName = this.dataset.computer;
-                if (socket) socket.close();
-
-                const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-                const wsUrl = wsProtocol + window.location.host + '/ws/screen/' + encodeURIComponent(computerName) + '/?role=viewer';
-
-                socket = new WebSocket(wsUrl);
-                socket.binaryType = 'blob';
-                socket.onopen = function () {
-                    statusText.innerText = 'Jonli efirga ulanildi: ' + computerName;
-                    statusText.style.display = 'block';
-                };
-                socket.onmessage = function (event) {
-                    const blob = event.data instanceof Blob ? event.data : new Blob([event.data], { type: 'image/jpeg' });
-                    const url = URL.createObjectURL(blob);
-                    screenStream.onload = function () {
-                        URL.revokeObjectURL(url);
-                    };
-                    screenStream.src = url;
-                    statusText.style.display = 'none';
-                };
-                socket.onclose = function () {
-                    statusText.innerText = 'Aloqa uzildi yoki kompyuter o\'chiq.';
-                    statusText.style.display = 'block';
-                };
-                socket.onerror = function () {
-                    statusText.innerText = 'Ulanishda xatolik yuz berdi.';
-                    statusText.style.display = 'block';
-                };
+                connectToComputer(this);
             });
         });
     </script>
