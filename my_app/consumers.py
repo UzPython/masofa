@@ -28,16 +28,16 @@ def normalize_agent_id(agent_id):
 class ScreenConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _register_agent(self):
-        computer, _ = Computer.objects.get_or_create(
-            name=self.agent_id,
-            defaults={
-                'ip_address': '127.0.0.1',
-                'username': self.username or 'agent',
-                'password': self.password or 'agent123',
-                'is_online': True,
-                'status_text': 'Online',
-            },
-        )
+        computer = Computer.objects.filter(name=self.agent_id).order_by('pk').first()
+        if computer is None:
+            computer = Computer.objects.create(
+                name=self.agent_id,
+                ip_address='127.0.0.1',
+                username=self.username or 'agent',
+                password=self.password or 'agent123',
+                is_online=True,
+                status_text='Online',
+            )
         if self.username:
             computer.username = self.username
         if self.password:

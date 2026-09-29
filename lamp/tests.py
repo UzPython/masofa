@@ -2,11 +2,14 @@ import os
 
 from django.contrib.auth import get_user_model
 from django.db.models import Q
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
+from channels.routing import URLRouter
+from channels.testing import WebsocketCommunicator
 
 from agent import build_ws_url
 from my_app.consumers import normalize_agent_id
+from my_app.routing import websocket_urlpatterns
 from .models import Computer
 
 
@@ -49,6 +52,21 @@ class AgentStreamConfigTests(TestCase):
             build_ws_url('PC-05', username='agentuser', password='secret123'),
             'ws://127.0.0.1:8000/ws/screen/PC-05/?role=agent&username=agentuser&password=secret123',
         )
+
+
+class AgentWebsocketConnectionTests(TransactionTestCase):
+    async def test_agent_connects_when_computer_names_are_duplicated(self):
+        await Computer.objects.acreate(name='123')
+        await Computer.objects.acreate(name='123')
+        communicator = WebsocketCommunicator(
+            URLRouter(websocket_urlpatterns),
+            '/ws/screen/123/?role=agent',
+        )
+
+        connected, _ = await communicator.connect()
+
+        self.assertTrue(connected)
+        await communicator.disconnect()
 
 
 class UserAccessIsolationTests(TestCase):
