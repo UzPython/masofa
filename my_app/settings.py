@@ -151,3 +151,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Mana shu qatorni qo'shing:
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://masofa-production.up.railway.app',
+]
