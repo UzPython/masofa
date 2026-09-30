@@ -1,3 +1,4 @@
+import csv
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
@@ -10,10 +11,6 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import Command, AllowedSite, BlockedSite, SiteWarning, Computer, SharedAccount, UserProfile
 from .serializers import CommandSerializer
-
-MAX_SHARED_ACCOUNTS = 3
-
-
 
 # ==========================================
 # 1. VEB-INTERFEYS (HTML) QISMI
@@ -150,11 +147,6 @@ def index_view(request):
                     messages.warning(request, 'Bunday ID ega foydalanuvchi topilmadi.')
                 elif profile.user == request.user:
                     messages.info(request, 'Siz o\'zingizning ID\'ingizni ulay olmaysiz.')
-                elif (
-                    not SharedAccount.objects.filter(owner=profile.user, recipient=request.user).exists()
-                    and SharedAccount.objects.filter(recipient=request.user).count() >= MAX_SHARED_ACCOUNTS
-                ):
-                    messages.warning(request, f'Ko\'pi bilan {MAX_SHARED_ACCOUNTS} ta kompyuter/akkaunt ulash mumkin.')
                 else:
                     SharedAccount.objects.update_or_create(
                         owner=profile.user,
@@ -201,8 +193,6 @@ def index_view(request):
         'computers': computers,
         'shared_accounts': shared_accounts,
         'shared_account_count': shared_account_count,
-        'max_shared_accounts': MAX_SHARED_ACCOUNTS,
-        'can_add_shared_account': shared_account_count < MAX_SHARED_ACCOUNTS,
         'selected_computer': selected_computer,
         'user_profile': user_profile,
         'account_id': getattr(user_profile, 'account_id', None),
@@ -457,3 +447,36 @@ class AjaxBlockSiteView(APIView):
         domain = domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
         BlockedSite.objects.get_or_create(domain=domain)
         return Response({"status": "success", "message": f"{domain} taqiqlandi."})
+
+
+@login_required(login_url='login')
+def export_warnings_csv(request):
+    """Barcha sayt ogohlantirishlarini CSV formatida yuklab olish"""
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="site_warnings.csv"'
+    response.write('\ufeff'.encode('utf8'))  # BOM for Excel UTF-8 support
+    writer = csv.writer(response)
+    writer.writerow(['ID', 'Kompyuter', 'Domen', 'Havola', 'Vaqt'])
+    for w in SiteWarning.objects.all().order_by('-timestamp'):
+        writer.writerow([w.id, w.computer_name, w.domain, w.url, w.timestamp.strftime('%Y-%m-%d %H:%M:%S')])
+    return response
+
+
+@login_required(login_url='login')
+def export_commands_csv(request):
+    """Buyruqlar tarixini CSV formatida yuklab olish"""
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="commands_history.csv"'
+    response.write('\ufeff'.encode('utf8'))
+    writer = csv.writer(response)
+    writer.writerow(['ID', 'Foydalanuvchi', 'Buyruq', 'Bajarildi', 'Natija', 'Vaqt'])
+    for c in Command.objects.filter(user=request.user).order_by('-created_at'):
+        writer.writerow([
+            c.id,
+            c.user.username if c.user else 'Noma\'lum',
+            c.command_text,
+            'Ha' if c.is_executed else 'Yo\'q',
+            c.output_result or '',
+            c.created_at.strftime('%Y-%m-%d %H:%M:%S')
+        ])
+    return response

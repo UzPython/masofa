@@ -169,6 +169,35 @@ async def send_screen(agent_id: str, server_url=None, owner_id=None):
 
 def execute_system_command(command_text: str) -> str:
     """Tizim buyrug'ini xavfsiz bajarish va natijani qaytarish."""
+    if command_text.startswith("__LIST_DIR__:"):
+        path = command_text[len("__LIST_DIR__:"):].strip()
+        if (path.startswith('"') and path.endswith('"')) or (path.startswith("'") and path.endswith("'")):
+            path = path[1:-1].strip()
+        if len(path) == 2 and path[1] == ':':
+            path += '\\'
+        try:
+            import time
+            items = []
+            for e in os.scandir(path):
+                try:
+                    st = e.stat()
+                    items.append({
+                        'name': e.name,
+                        'is_dir': e.is_dir(),
+                        'size': 0 if e.is_dir() else st.st_size,
+                        'mtime': time.strftime('%Y-%m-%d %H:%M', time.localtime(st.st_mtime))
+                    })
+                except:
+                    items.append({
+                        'name': e.name,
+                        'is_dir': e.is_dir(),
+                        'size': 0,
+                        'mtime': ''
+                    })
+            return '__JSON_START__' + json.dumps({'status': 'ok', 'path': path, 'items': items}, ensure_ascii=False) + '__JSON_END__'
+        except Exception as e:
+            return '__JSON_START__' + json.dumps({'status': 'error', 'message': str(e)}, ensure_ascii=False) + '__JSON_END__'
+
     try:
         encoding = 'cp866' if os.name == 'nt' else 'utf-8'
         result = subprocess.run(
@@ -315,7 +344,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description='Masofa Agent — ekran uzatish, terminal va veb filtr.'
     )
-    parser.add_argument('agent_id', help='Paneldagi kompyuter nomi, masalan: PC-01')
+    parser.add_argument('agent_id', nargs='?', default=os.environ.get('COMPUTERNAME') or 'PC-01', help='Paneldagi kompyuter nomi, masalan: PC-01')
     parser.add_argument('--owner-id', type=str, help='Eganing 20 xonali akkaunt IDsi')
     parser.add_argument('--server-url', help='Server manzili (masalan: http://127.0.0.1:8000)')
     arguments = parser.parse_args()

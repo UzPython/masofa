@@ -200,7 +200,7 @@
                 </div>
                 <div>
                     <p class="text-xs text-slate-500 font-medium">Ulangan Akkauntlar</p>
-                    <p class="text-xl font-bold text-slate-800">{{ shared_account_count|default:0 }}/3 ta</p>
+                    <p class="text-xl font-bold text-slate-800">{{ shared_account_count|default:0 }} ta</p>
                 </div>
             </div>
 
@@ -248,6 +248,11 @@
             <button type="button" class="tab-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition duration-150 text-slate-600 hover:bg-slate-100" data-tab="tab-terminal">
                 <i class="fa-solid fa-terminal"></i>
                 <span>Masofaviy Terminal</span>
+            </button>
+
+            <button type="button" class="tab-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition duration-150 text-slate-600 hover:bg-slate-100" data-tab="tab-files">
+                <i class="fa-solid fa-folder-open text-amber-500"></i>
+                <span>Fayllar</span>
             </button>
 
             <button type="button" class="tab-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition duration-150 text-slate-600 hover:bg-slate-100" data-tab="tab-security">
@@ -473,9 +478,14 @@
                         <i class="fa-solid fa-clock-rotate-left text-indigo-600"></i> Buyruqlar Tarixi
                     </h3>
                     {% if commands %}
-                    <a href="{% url 'clear_commands' %}" onclick="return confirm('Barcha buyruqlar tarixini tozalashni xohlaysizmi?')" class="text-xs text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1">
-                        <i class="fa-solid fa-trash-can"></i> Tarixni tozalash
-                    </a>
+                    <div class="flex items-center gap-3">
+                        <a href="{% url 'export_commands_csv' %}" class="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg transition">
+                            <i class="fa-solid fa-file-csv"></i> CSV Eksport
+                        </a>
+                        <a href="{% url 'clear_commands' %}" onclick="return confirm('Barcha buyruqlar tarixini tozalashni xohlaysizmi?')" class="text-xs text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1">
+                            <i class="fa-solid fa-trash-can"></i> Tarixni tozalash
+                        </a>
+                    </div>
                     {% endif %}
                 </div>
 
@@ -636,9 +646,14 @@
                                 <p class="text-xs text-slate-500 mt-1">Ruxsatsiz saytlarga urinishlar jurnali</p>
                             </div>
                             {% if warnings %}
-                            <a href="{% url 'clear_warnings' %}" onclick="return confirm('Barcha ogohlantirishlar tarixini tozalashni xohlaysizmi?')" class="text-xs text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1">
-                                <i class="fa-solid fa-trash-can"></i> Tozalash
-                            </a>
+                            <div class="flex items-center gap-3">
+                                <a href="{% url 'export_warnings_csv' %}" class="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg transition">
+                                    <i class="fa-solid fa-file-csv"></i> CSV Eksport
+                                </a>
+                                <a href="{% url 'clear_warnings' %}" onclick="return confirm('Barcha ogohlantirishlar tarixini tozalashni xohlaysizmi?')" class="text-xs text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1">
+                                    <i class="fa-solid fa-trash-can"></i> Tozalash
+                                </a>
+                            </div>
                             {% endif %}
                         </div>
 
@@ -672,6 +687,58 @@
 
             </div>
 
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- TAB: MASOFAVIY FAYL MENEJERI (FILE MANAGER)                 -->
+        <!-- ============================================================ -->
+        <div id="tab-files" class="tab-content hidden space-y-6">
+            <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-5">
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-folder-tree text-amber-500"></i> Masofaviy Fayl Menejeri
+                        </h3>
+                        <p class="text-xs text-slate-500 mt-1">Ulangan kompyuter fayl tizimini ko'rish va boshqarish</p>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <button type="button" data-path="C:\" class="quick-path-btn text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 px-3 py-1.5 rounded-xl font-mono border border-slate-200 transition">C:\</button>
+                        <button type="button" data-path="D:\" class="quick-path-btn text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 px-3 py-1.5 rounded-xl font-mono border border-slate-200 transition">D:\</button>
+                        <button type="button" data-path="C:\Users" class="quick-path-btn text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 px-3 py-1.5 rounded-xl font-mono border border-slate-200 transition">Users</button>
+                        <button type="button" data-path="C:\Windows\Temp" class="quick-path-btn text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 px-3 py-1.5 rounded-xl font-mono border border-slate-200 transition">Temp</button>
+                    </div>
+                </div>
+
+                <form id="fileBrowserForm" class="flex items-center gap-2">
+                    <div class="relative flex-1">
+                        <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                            <i class="fa-solid fa-folder"></i>
+                        </span>
+                        <input type="text" id="filePathInput" value="C:\" placeholder="Papka manzilini kiriting (masalan: C:\)"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs md:text-sm font-mono text-slate-800 focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-xs md:text-sm font-semibold transition flex items-center gap-2 shadow-sm">
+                        <i class="fa-solid fa-magnifying-glass"></i> Ochish
+                    </button>
+                </form>
+
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm min-h-[350px] max-h-[500px] overflow-y-auto" id="fileListScreen">
+                    <div class="text-slate-500 text-xs text-center py-12">
+                        <i class="fa-solid fa-folder-open text-3xl text-amber-400 mb-2 block"></i>
+                        Papka tarkibini ko'rish uchun yuqoridagi yo'lni kiriting va "Ochish" tugmasini bosing (yoki tezkor papkani tanlang).
+                    </div>
+                </div>
+
+                <div class="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4 flex items-start gap-3">
+                    <div class="h-9 w-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                        <i class="fa-solid fa-shield-halved"></i>
+                    </div>
+                    <div class="text-xs text-indigo-900 space-y-1">
+                        <p class="font-bold text-sm">Doimiy fon rejimi (Background Persistence)</p>
+                        <p>Chrome brauzerini yopib chiqib ketsangiz ham, ulangan kompyuterdagi agent (<code class="font-mono bg-indigo-100 px-1.5 py-0.5 rounded">agent.py</code>) orqa fonda ishlashda davom etadi. Brauzerni qayta ochib <code class="font-mono bg-indigo-100 px-1.5 py-0.5 rounded">localhost:8000</code> ga kirsangiz, kompyuterni yana to'liq boshqara va kuzata olasiz!</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- ============================================================ -->
@@ -722,8 +789,8 @@
                             <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
                                 <i class="fa-solid fa-user-plus text-indigo-600"></i> Yangi Foydalanuvchini Ulash
                             </h3>
-                            <span class="text-xs font-semibold px-2.5 py-1 rounded-full {% if can_add_shared_account %}bg-indigo-100 text-indigo-700{% else %}bg-amber-100 text-amber-700{% endif %}">
-                                Limit: {{ shared_account_count }}/{{ max_shared_accounts }}
+                            <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700">
+                                Cheksiz ulash
                             </span>
                         </div>
 
@@ -742,17 +809,12 @@
                                         class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-mono">
                                 </div>
                             </div>
-                            <button type="submit" {% if not can_add_shared_account %}disabled{% endif %}
+                            <button type="submit"
                                 class="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold text-xs sm:text-sm py-2.5 px-6 rounded-xl transition shadow-md flex items-center gap-2">
                                 <i class="fa-solid fa-link"></i> Akkauntni Ulash
                             </button>
                         </form>
 
-                        {% if not can_add_shared_account %}
-                        <p class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                            Ulanish limiti to'ldi. Ko'pi bilan 3 ta akkaunt ulash mumkin.
-                        </p>
-                        {% endif %}
                     </div>
 
                     <!-- Ulangan Akkauntlar Ro'yxati -->
@@ -1250,6 +1312,211 @@
                 if (domainInput) {
                     domainInput.value = btn.dataset.site;
                     domainInput.focus();
+                }
+            });
+        });
+
+        // 11. MASOFAVIY FAYL MENEJERI (FILE BROWSER)
+        const fileBrowserForm = document.getElementById('fileBrowserForm');
+        const filePathInput = document.getElementById('filePathInput');
+        const fileListScreen = document.getElementById('fileListScreen');
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Event listener for file list screen interactions (browse path / parent)
+        if (fileListScreen) {
+            fileListScreen.addEventListener('click', (e) => {
+                const browseTarget = e.target.closest('[data-browse-path]');
+                if (browseTarget) {
+                    e.preventDefault();
+                    loadDirectory(browseTarget.dataset.browsePath);
+                    return;
+                }
+                const parentTarget = e.target.closest('[data-parent-path]');
+                if (parentTarget) {
+                    e.preventDefault();
+                    navigateToParent(parentTarget.dataset.parentPath);
+                    return;
+                }
+            });
+        }
+
+        window.loadDirectory = function(path) {
+            filePathInput.value = path;
+            if (fileBrowserForm) {
+                fileBrowserForm.requestSubmit ? fileBrowserForm.requestSubmit() : fileBrowserForm.dispatchEvent(new Event('submit'));
+            }
+        };
+
+        window.navigateToParent = function(path) {
+            let cleanPath = path;
+            if (cleanPath.endsWith('\\') && cleanPath.length > 3) {
+                cleanPath = cleanPath.slice(0, -1);
+            }
+            const lastIdx = cleanPath.lastIndexOf('\\');
+            if (lastIdx > 0) {
+                let parent = cleanPath.substring(0, lastIdx + 1);
+                if (parent.length === 2) parent += '\\';
+                loadDirectory(parent);
+            } else if (lastIdx === 0) {
+                loadDirectory('C:\\');
+            }
+        };
+
+        window.refreshFiles = function() {
+            if (fileBrowserForm) {
+                fileBrowserForm.requestSubmit ? fileBrowserForm.requestSubmit() : fileBrowserForm.dispatchEvent(new Event('submit'));
+            }
+        };
+
+        function escapeHtml(str) {
+            return (str + '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        function escapeAttr(str) {
+            return (str + '').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        function renderFileList(path, items) {
+            filePathInput.value = path;
+            
+            items.sort((a, b) => {
+                if (a.is_dir === b.is_dir) return a.name.localeCompare(b.name);
+                return a.is_dir ? -1 : 1;
+            });
+
+            let html = `
+                <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 text-xs text-slate-500">
+                    <div>Joriy yo'l: <strong class="font-mono text-slate-800">${escapeHtml(path)}</strong> (${items.length} ta element)</div>
+                    <div class="flex items-center gap-2">
+                        ${path.length > 3 ? `<button type="button" class="px-2.5 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-slate-700 transition font-semibold" data-parent-path="${escapeAttr(path)}"><i class="fa-solid fa-arrow-up mr-1"></i> Yuqoriga</button>` : ''}
+                        <button type="button" class="px-2.5 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-slate-700 transition font-semibold" onclick="refreshFiles()"><i class="fa-solid fa-rotate mr-1"></i> Yangilash</button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-200 text-slate-400 font-semibold text-[11px] uppercase tracking-wider">
+                                <th class="py-2.5 px-3">Nomi</th>
+                                <th class="py-2.5 px-3 w-28">Hajmi</th>
+                                <th class="py-2.5 px-3 w-40">O'zgartirilgan vaqti</th>
+                                <th class="py-2.5 px-3 w-20 text-right">Amal</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-xs">
+            `;
+
+            if (items.length === 0) {
+                html += `<tr><td colspan="4" class="py-8 text-center text-slate-400">Bu papka bo'sh.</td></tr>`;
+            } else {
+                items.forEach(item => {
+                    const fullItemPath = path.endsWith('\\') ? path + item.name : path + '\\' + item.name;
+                    const icon = item.is_dir 
+                        ? '<i class="fa-solid fa-folder text-amber-500 text-base"></i>' 
+                        : '<i class="fa-solid fa-file text-slate-400 text-base"></i>';
+                    
+                    html += `
+                        <tr class="hover:bg-slate-50/80 transition group">
+                            <td class="py-2.5 px-3">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="shrink-0">${icon}</span>
+                                    ${item.is_dir 
+                                        ? `<a href="#" class="font-semibold text-slate-800 hover:text-indigo-600 truncate max-w-xs block" data-browse-path="${escapeAttr(fullItemPath)}" title="${escapeAttr(item.name)}">${escapeHtml(item.name)}</a>`
+                                        : `<span class="text-slate-700 truncate max-w-xs block" title="${escapeAttr(item.name)}">${escapeHtml(item.name)}</span>`
+                                    }
+                                </div>
+                            </td>
+                            <td class="py-2.5 px-3 font-mono text-slate-500">${item.is_dir ? '-' : formatBytes(item.size)}</td>
+                            <td class="py-2.5 px-3 text-slate-400">${item.mtime || '-'}</td>
+                            <td class="py-2.5 px-3 text-right">
+                                ${item.is_dir 
+                                    ? `<button type="button" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-600 rounded-lg text-xs font-semibold transition" data-browse-path="${escapeAttr(fullItemPath)}">Ochish</button>`
+                                    : `<span class="text-slate-400 text-[11px]">-</span>`
+                                }
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+
+            html += `</tbody></table></div>`;
+            fileListScreen.innerHTML = html;
+        }
+
+        if (fileBrowserForm) {
+            fileBrowserForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const path = filePathInput.value.trim() || 'C:\\';
+                fileListScreen.innerHTML = `<div class="text-center py-12 text-amber-600 text-xs"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block"></i> "${escapeHtml(path)}" papkasi o'qilmoqda...</div>`;
+                
+                const formData = new FormData();
+                formData.append('command_text', `__LIST_DIR__:${path}`);
+                const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+                fetch('/api/ajax-send-command/', {
+                    method: 'POST',
+                    headers: {'X-CSRFToken': csrftoken},
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        const commandId = data.command_id;
+                        let checkCount = 0;
+                        const pollInterval = setInterval(async () => {
+                            checkCount++;
+                            if (checkCount > 30) {
+                                clearInterval(pollInterval);
+                                fileListScreen.innerHTML = `<div class="p-4 text-rose-500 bg-rose-50 rounded-xl text-xs">[Xato] Agent javob bermadi (vaqt tugadi).</div>`;
+                                return;
+                            }
+                            try {
+                                const res = await fetch(`/api/ajax-command-status/${commandId}/`);
+                                const resData = await res.json();
+                                if (resData.is_executed) {
+                                    clearInterval(pollInterval);
+                                    const output = resData.output_result || '';
+                                    const startIdx = output.indexOf('__JSON_START__');
+                                    const endIdx = output.indexOf('__JSON_END__');
+                                    let jsonStr = '';
+                                    if (startIdx !== -1 && endIdx !== -1) {
+                                        jsonStr = output.substring(startIdx + 14, endIdx);
+                                    } else {
+                                        jsonStr = output.trim();
+                                    }
+                                    try {
+                                        const dataObj = JSON.parse(jsonStr);
+                                        if (dataObj.status === 'ok') {
+                                            renderFileList(dataObj.path, dataObj.items);
+                                        } else {
+                                            fileListScreen.innerHTML = `<div class="p-4 text-rose-600 bg-rose-50 rounded-xl text-xs font-medium">[Xatolik]: ${escapeHtml(dataObj.message)}</div>`;
+                                        }
+                                    } catch (err) {
+                                        fileListScreen.innerHTML = `<div class="p-4 text-rose-600 bg-rose-50 rounded-xl text-xs font-medium mb-2">[Xatolik] Papkani o'qib bo'lmadi yoki noto'g'ri format.</div><pre class="p-3 bg-slate-900 text-slate-200 text-xs rounded-xl overflow-auto font-mono">${escapeHtml(output)}</pre>`;
+                                    }
+                                }
+                            } catch (err) {}
+                        }, 1000);
+                    } else {
+                        fileListScreen.innerHTML = `<div class="p-4 text-rose-600 bg-rose-50 rounded-xl text-xs">[Xato] Buyruq yuborilmadi.</div>`;
+                    }
+                })
+                .catch(err => {
+                    fileListScreen.innerHTML = `<div class="p-4 text-rose-600 bg-rose-50 rounded-xl text-xs">[Xato] Server bilan aloqa yo'q.</div>`;
+                });
+            });
+        }
+
+        document.querySelectorAll('.quick-path-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                filePathInput.value = btn.dataset.path;
+                if (fileBrowserForm) {
+                    fileBrowserForm.requestSubmit ? fileBrowserForm.requestSubmit() : fileBrowserForm.dispatchEvent(new Event('submit'));
                 }
             });
         });

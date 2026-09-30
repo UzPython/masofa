@@ -12,6 +12,8 @@ from .views import (
     clear_commands,
     clear_warnings,
     download_agent_bat,
+    export_warnings_csv,
+    export_commands_csv,
     ajax_send_command,
     ajax_command_status,
     GetCommandAPIView,
@@ -36,6 +38,8 @@ urlpatterns = [
     path('blocked-site/delete/<int:site_id>/', delete_blocked_site, name='delete_blocked_site'),
     path('commands/clear/', clear_commands, name='clear_commands'),
     path('warnings/clear/', clear_warnings, name='clear_warnings'),
+    path('warnings/export-csv/', export_warnings_csv, name='export_warnings_csv'),
+    path('commands/export-csv/', export_commands_csv, name='export_commands_csv'),
     path('agent/download-bat/', download_agent_bat, name='download_agent_bat'),
 
     # AJAX orqali tezkor terminal buyruqlari

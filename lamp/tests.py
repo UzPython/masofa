@@ -208,15 +208,15 @@ class UserAccessIsolationTests(TestCase):
         self.assertFalse(computer.shared_with.filter(pk=recipient.pk).exists())
         self.assertContains(response, 'ID 20 ta raqamdan iborat')
 
-    def test_sharing_is_limited_to_three_accounts(self):
+    def test_sharing_allows_more_than_three_accounts(self):
         recipient = get_user_model().objects.create_user(username='recipient', password='StrongPass123')
         owners = [
             get_user_model().objects.create_user(username=f'owner-{index}', password='StrongPass123')
-            for index in range(4)
+            for index in range(5)
         ]
         self.client.force_login(recipient)
 
-        for owner in owners[:3]:
+        for owner in owners:
             self.client.post(
                 reverse('home'),
                 {
@@ -226,18 +226,10 @@ class UserAccessIsolationTests(TestCase):
                 },
             )
 
-        response = self.client.post(
-            reverse('home'),
-            {
-                'form_type': 'share_access',
-                'share_id': owners[3].profile.account_id,
-                'share_name': owners[3].username,
-            },
-            follow=True,
-        )
+        response = self.client.get(reverse('home'))
 
-        self.assertEqual(SharedAccount.objects.filter(recipient=recipient).count(), 3)
-        self.assertContains(response, 'Ulanish limiti to\'ldi')
+        self.assertEqual(SharedAccount.objects.filter(recipient=recipient).count(), 5)
+        self.assertContains(response, '5 ta')
 
 
 class AuthFlowTests(TestCase):
