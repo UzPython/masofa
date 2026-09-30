@@ -1,5 +1,23 @@
 from django.urls import path
-from .views import index_view, GetCommandAPIView, login_view, logout_view, register_view, admin_create_view
+from .views import (
+    index_view,
+    login_view,
+    logout_view,
+    register_view,
+    admin_create_view,
+    delete_allowed_site,
+    delete_blocked_site,
+    delete_shared_account,
+    delete_computer,
+    clear_commands,
+    clear_warnings,
+    download_agent_bat,
+    ajax_send_command,
+    ajax_command_status,
+    GetCommandAPIView,
+    CheckSiteAPIView,
+    WhitelistAPIView,
+)
 
 urlpatterns = [
     # Avtorizatsiya va akkaunt boshqaruvi
@@ -11,6 +29,21 @@ urlpatterns = [
     # Bosh sahifa (Veb interfeysi / HTML)
     path('', index_view, name='home'),
 
-    # Kompyuter (Agent) uchun API manzili
+    # Boshqaruv va o'chirish marshrutlari
+    path('share/delete/<int:share_id>/', delete_shared_account, name='delete_share'),
+    path('computer/delete/<int:computer_id>/', delete_computer, name='delete_computer'),
+    path('allowed-site/delete/<int:site_id>/', delete_allowed_site, name='delete_allowed_site'),
+    path('blocked-site/delete/<int:site_id>/', delete_blocked_site, name='delete_blocked_site'),
+    path('commands/clear/', clear_commands, name='clear_commands'),
+    path('warnings/clear/', clear_warnings, name='clear_warnings'),
+    path('agent/download-bat/', download_agent_bat, name='download_agent_bat'),
+
+    # AJAX orqali tezkor terminal buyruqlari
+    path('api/ajax-send-command/', ajax_send_command, name='ajax_send_command'),
+    path('api/ajax-command-status/<int:command_id>/', ajax_command_status, name='ajax_command_status'),
+
+    # Kompyuter (Agent) uchun API manzillari
     path('api/command/', GetCommandAPIView.as_view(), name='api-command'),
+    path('api/check-site/', CheckSiteAPIView.as_view(), name='api-check-site'),
+    path('api/whitelist/', WhitelistAPIView.as_view(), name='api-whitelist'),
 ]

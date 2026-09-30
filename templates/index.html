@@ -3,27 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Boshqaruv Paneli (Command Center)</title>
+    <title>Masofa - Masofaviy Boshqaruv Markazi</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome Icons -->
+    <!-- FontAwesome 6 Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            transition: background-color 0.2s, color 0.2s;
         }
         html.theme-dark body {
-            background-color: #020617 !important;
+            background-color: #090d16 !important;
             color: #e2e8f0 !important;
         }
         html.theme-dark header {
-            background-color: #1e1b4b !important;
+            background-color: #0f172a !important;
+            border-bottom-color: #1e293b !important;
         }
         html.theme-dark .bg-white {
-            background-color: #0f172a !important;
+            background-color: #111827 !important;
         }
         html.theme-dark .bg-slate-50 {
-            background-color: #1e293b !important;
+            background-color: #172033 !important;
         }
         html.theme-dark .bg-indigo-50 {
             background-color: #1e1b4b !important;
@@ -36,23 +38,25 @@
         html.theme-dark .text-slate-500 {
             color: #94a3b8 !important;
         }
-        html.theme-dark .text-indigo-800 {
-            color: #c7d2fe !important;
-        }
+        html.theme-dark .border-slate-100,
         html.theme-dark .border-slate-200,
         html.theme-dark .border-slate-300,
         html.theme-dark .border-indigo-100 {
-            border-color: #334155 !important;
+            border-color: #1f293d !important;
         }
         html.theme-dark input,
-        html.theme-dark select {
-            background-color: #1e293b !important;
-            border-color: #475569 !important;
-            color: #e2e8f0 !important;
+        html.theme-dark select,
+        html.theme-dark textarea {
+            background-color: #172033 !important;
+            border-color: #334155 !important;
+            color: #f1f5f9 !important;
         }
-        html.theme-dark input::placeholder {
-            color: #94a3b8 !important;
+        html.theme-dark input::placeholder,
+        html.theme-dark textarea::placeholder {
+            color: #64748b !important;
         }
+
+        /* Stream Container Fullscreen */
         #streamContainerCard:fullscreen {
             width: 100vw;
             height: 100vh;
@@ -60,6 +64,8 @@
             border-radius: 0;
             display: flex;
             flex-direction: column;
+            background-color: #000;
+            padding: 12px;
         }
         #streamContainerCard:fullscreen #videoWrapper {
             flex: 1;
@@ -71,249 +77,880 @@
             height: 100%;
             max-width: 100%;
             max-height: 100%;
+            object-fit: contain;
         }
+
+        /* Custom Scrollbar */
         ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+            width: 7px;
+            height: 7px;
         }
         ::-webkit-scrollbar-track {
-            background: #f1f5f9;
+            background: rgba(15, 23, 42, 0.05);
         }
         ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
+            background: #94a3b8;
             border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
+            background: #64748b;
+        }
+
+        /* Terminal styling */
+        .terminal-window {
+            background-color: #070b14;
+            color: #38bdf8;
+            font-family: 'Consolas', 'Fira Code', 'Courier New', monospace;
+        }
+
+        /* Radar scanline animation */
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(1000%); }
+        }
+        .scanline-effect {
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 10px;
+            background: linear-gradient(to bottom, rgba(16, 185, 129, 0), rgba(16, 185, 129, 0.3), rgba(16, 185, 129, 0));
+            animation: scanline 4s linear infinite;
         }
     </style>
 </head>
-<body class="bg-slate-50 font-sans text-slate-800 antialiased min-h-screen flex flex-col">
+<body class="bg-slate-100 font-sans text-slate-800 antialiased min-h-screen flex flex-col">
 
-    <!-- Asosiy navigatsiya (Navbar) -->
-    <header class="bg-indigo-600 shadow-md text-white">
-        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 class="text-xl font-bold flex items-center gap-2">
-                <i class="fa-solid fa-terminal"></i> Masofaviy Boshqaruv Paneli
-            </h1>
+    <!-- Asosiy Navigatsiya (Navbar) -->
+    <header class="bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-800 shadow-lg text-white sticky top-0 z-40 border-b border-indigo-500/20">
+        <div class="max-w-7xl mx-auto px-4 py-3.5 flex flex-wrap justify-between items-center gap-4">
+            
+            <!-- Logo & Brend -->
             <div class="flex items-center gap-3">
-                <div class="flex items-center gap-3">
-                <button type="button" id="themeToggle" class="inline-flex items-center gap-2 rounded-lg bg-indigo-700 hover:bg-indigo-800 px-3 py-2 text-sm font-semibold transition" aria-label="Tungi rejimni yoqish">
-                    <i id="themeIcon" class="fa-solid fa-moon" aria-hidden="true"></i>
-                    <span id="themeText">Tungi rejim</span>
+                <div class="h-10 w-10 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
+                    <i class="fa-solid fa-satellite-dish text-emerald-400 text-lg animate-pulse"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg md:text-xl font-bold tracking-tight flex items-center gap-2">
+                        Masofa Command Center
+                    </h1>
+                    <p class="text-xs text-indigo-200">Masofaviy Boshqaruv & Monitoring Tizimi</p>
+                </div>
+            </div>
+
+            <!-- Foydalanuvchi & Amallar -->
+            <div class="flex items-center flex-wrap gap-2.5">
+                
+                <!-- Tungi rejim tugmasi -->
+                <button type="button" id="themeToggle" class="inline-flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 px-3 py-2 text-xs font-semibold backdrop-blur-md border border-white/10 transition shadow-sm" title="Rejimni almashtirish">
+                    <i id="themeIcon" class="fa-solid fa-moon text-amber-300"></i>
+                    <span id="themeText" class="hidden sm:inline">Tungi rejim</span>
                 </button>
-                <div class="text-sm bg-indigo-700 px-3 py-1.5 rounded-lg shadow-inner">
-                    {% if request.user.is_authenticated %}
-                        Foydalanuvchi: <span class="font-semibold">{{ request.user.username }}</span>
-                        {% if account_id %}
-                            <span class="ml-2 bg-white/10 px-2 py-1 rounded-md font-mono text-[11px]">ID: {{ account_id }}</span>
-                        {% endif %}
-                    {% else %}
-                        Mehmon
+
+                <!-- Foydalanuvchi va ID Pilli -->
+                {% if request.user.is_authenticated %}
+                <div class="flex items-center gap-2 bg-indigo-900/60 border border-indigo-400/30 px-3 py-1.5 rounded-xl text-xs backdrop-blur-md shadow-inner">
+                    <span class="inline-flex items-center gap-1.5 text-indigo-100">
+                        <i class="fa-solid fa-user-shield text-emerald-400"></i>
+                        <span class="font-bold">{{ request.user.username }}</span>
+                    </span>
+                    {% if account_id %}
+                    <span class="text-indigo-400">|</span>
+                    <button type="button" id="copyNavIdBtn" class="flex items-center gap-1 font-mono text-[11px] bg-indigo-500/30 hover:bg-indigo-500/50 text-indigo-100 px-2 py-0.5 rounded-lg border border-indigo-300/20 transition" title="ID-ni nusxalash">
+                        <i class="fa-solid fa-key text-[10px] text-amber-300"></i>
+                        <span>ID: {{ account_id }}</span>
+                        <i class="fa-solid fa-copy text-[10px] ml-1"></i>
+                    </button>
                     {% endif %}
                 </div>
-                </div>
+                {% endif %}
+
+                <!-- Chiqish tugmasi -->
                 {% if request.user.is_authenticated %}
-                    <a href="{% url 'logout' %}" class="text-sm bg-white text-indigo-700 hover:bg-slate-100 px-3 py-2 rounded-lg font-semibold transition">
-                        Chiqish
-                    </a>
+                <a href="{% url 'logout' %}" class="inline-flex items-center gap-1.5 text-xs bg-rose-500/20 hover:bg-rose-500/30 text-rose-100 border border-rose-400/30 px-3 py-2 rounded-xl font-semibold transition shadow-sm">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                    <span>Chiqish</span>
+                </a>
                 {% endif %}
             </div>
         </div>
     </header>
 
+    <!-- Xabarlar bloki (Django Messages) -->
     {% if messages %}
-        <div class="max-w-7xl mx-auto px-4 pt-6 w-full">
+        <div class="max-w-7xl mx-auto px-4 pt-4 w-full space-y-2">
             {% for message in messages %}
-                <div class="rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-800 px-4 py-3 text-sm shadow-sm">
-                    {{ message }}
+                <div class="rounded-xl border border-indigo-200 bg-indigo-50/90 text-indigo-900 px-4 py-3 text-sm shadow-sm flex items-center justify-between">
+                    <div class="flex items-center gap-2.5">
+                        <i class="fa-solid fa-circle-info text-indigo-600"></i>
+                        <span>{{ message }}</span>
+                    </div>
+                    <button type="button" onclick="this.parentElement.remove()" class="text-indigo-400 hover:text-indigo-700">&times;</button>
                 </div>
             {% endfor %}
         </div>
     {% endif %}
 
-    <!-- Kontent qismi -->
-    <main class="max-w-7xl mx-auto px-4 py-8 flex-grow w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <!-- Asosiy Konteyner -->
+    <main class="max-w-7xl mx-auto px-4 py-6 flex-grow w-full space-y-6">
 
-        <!-- Chap tomon: ID orqali ulash va boshqarish -->
-        <div class="space-y-6">
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit space-y-6">
-                
-                <!-- ID orqali ulash formasi -->
-                <div>
-                    <h2 class="text-lg font-semibold mb-4 text-slate-700 flex items-center gap-2">
-                        <i class="fa-solid fa-share-nodes text-indigo-600"></i> ID orqali ulash
-                    </h2>
-                    <p class="mb-3 text-xs text-slate-500">Ulanganlar: {{ shared_account_count|default:0 }}/{{ max_shared_accounts|default:3 }}</p>
-                    
-                    {% if account_id %}
-                    <div class="mb-4 rounded-xl border border-indigo-100 bg-indigo-50 p-3">
-                        <label class="mb-2 block text-sm font-medium text-slate-600">Mening 20 xonali IDim</label>
-                        <div class="flex items-center gap-2">
-                            <code id="accountIdValue" class="min-w-0 flex-1 break-all font-mono text-sm font-semibold text-indigo-800">{{ account_id }}</code>
-                            <button type="button" id="copyAccountId" class="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-700" title="ID-ni nusxalash">
-                                <i class="fa-solid fa-copy"></i> Nusxa olish
-                            </button>
-                        </div>
-                        <p id="accountIdCopyStatus" class="mt-2 min-h-4 text-xs text-emerald-700" aria-live="polite"></p>
-                    </div>
-                    {% endif %}
-
-                    <form method="POST" class="space-y-3">
-                        {% csrf_token %}
-                        <input type="hidden" name="form_type" value="share_access">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-600 mb-1">Ulangan foydalanuvchi nomi</label>
-                            <input type="text" name="share_name" placeholder="Masalan: Sherbek" maxlength="100" required
-                                class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-600 mb-1">Ulashmoqchi bo'lgan foydalanuvchining IDsi</label>
-                            <input type="text" name="share_id" placeholder="20 xonali ID" inputmode="numeric" minlength="20" maxlength="20" pattern="[0-9]{20}" required title="ID 20 ta raqamdan iborat bo'lishi kerak"
-                                class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-mono">
-                        </div>
-                        <button type="submit"
-                            class="w-full bg-violet-600 hover:bg-violet-700 text-white font-medium py-2.5 px-4 rounded-xl transition duration-200 shadow-md flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-user-plus"></i> Ulash
-                        </button>
-                    </form>
-                    {% if not can_add_shared_account %}
-                    <p class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                        Ulanish limiti to'ldi. Ko'pi bilan 3 ta akkaunt ulash mumkin.
-                    </p>
-                    {% endif %}
+        <!-- STATISTIKA KARTALARI (KPI CARDS) -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <!-- Ulangan do'stlar -->
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition">
+                <div class="h-11 w-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg shrink-0">
+                    <i class="fa-solid fa-share-nodes"></i>
                 </div>
+                <div>
+                    <p class="text-xs text-slate-500 font-medium">Ulangan Akkauntlar</p>
+                    <p class="text-xl font-bold text-slate-800">{{ shared_account_count|default:0 }}/3 ta</p>
+                </div>
+            </div>
 
+            <!-- Bajarilgan buyruqlar -->
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition">
+                <div class="h-11 w-11 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center text-lg shrink-0">
+                    <i class="fa-solid fa-terminal"></i>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-500 font-medium">Masofaviy Buyruqlar</p>
+                    <p class="text-xl font-bold text-slate-800">{{ total_commands|default:0 }} ta</p>
+                </div>
+            </div>
+
+            <!-- Oq ro'yxat saytlari -->
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition">
+                <div class="h-11 w-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-lg shrink-0">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <div class="flex-1">
+                    <p class="text-xs text-slate-500 font-medium">Veb Filtr</p>
+                    <p class="text-xl font-bold text-slate-800">{{ total_allowed_sites|default:0 }} oq / {{ total_blocked_sites|default:0 }} qora sayt</p>
+                </div>
+            </div>
+
+            <!-- Xavfsizlik signallari -->
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition">
+                <div class="h-11 w-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-lg shrink-0">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-500 font-medium">Xavfsizlik Signallari</p>
+                    <p class="text-xl font-bold text-slate-800">{{ total_warnings|default:0 }} ta</p>
+                </div>
             </div>
         </div>
 
-        <!-- O'ng tomon: Ulangan akkauntlar va Jonli ekran -->
-        <div class="lg:col-span-2 space-y-6">
+        <!-- TABLAR NAVIGATSIYASI (TAB HEADERS) -->
+        <div class="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap gap-1.5">
+            <button type="button" class="tab-btn active inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition duration-150 bg-indigo-600 text-white shadow-sm" data-tab="tab-screen">
+                <i class="fa-solid fa-display"></i>
+                <span>Jonli Ekran</span>
+            </button>
 
-            <!-- Ulangan akkauntlar va Efirga ulanish -->
-            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                <div class="flex items-center justify-between mb-4 gap-3">
-                    <h2 class="text-lg font-semibold text-slate-700 flex items-center gap-2">
-                        <i class="fa-solid fa-users text-indigo-600"></i> Ulangan akkauntlar
-                    </h2>
-                    <span class="inline-flex items-center gap-2 rounded-full bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-semibold">
-                        <span class="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        Live
+            <button type="button" class="tab-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition duration-150 text-slate-600 hover:bg-slate-100" data-tab="tab-terminal">
+                <i class="fa-solid fa-terminal"></i>
+                <span>Masofaviy Terminal</span>
+            </button>
+
+            <button type="button" class="tab-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition duration-150 text-slate-600 hover:bg-slate-100" data-tab="tab-security">
+                <i class="fa-solid fa-shield-virus"></i>
+                <span>Veb Filtr & Xavfsizlik</span>
+                {% if total_warnings > 0 %}
+                <span class="ml-1 text-[11px] bg-rose-500 text-white px-2 py-0.5 rounded-full font-bold animate-pulse">{{ total_warnings }}</span>
+                {% endif %}
+            </button>
+
+            <button type="button" class="tab-btn inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition duration-150 text-slate-600 hover:bg-slate-100" data-tab="tab-sharing">
+                <i class="fa-solid fa-user-group"></i>
+                <span>Hamkorlik & ID Ulashish</span>
+            </button>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- TAB 1: JONLI EKRAN VA KUZATUV (SCREEN MONITORING)           -->
+        <!-- ============================================================ -->
+        <div id="tab-screen" class="tab-content space-y-6">
+            
+            <!-- Ekran Asosiy Bloki -->
+            <div id="streamContainerCard" class="bg-slate-900 border border-slate-800 p-4 md:p-6 rounded-3xl shadow-xl w-full text-center relative overflow-hidden">
+                
+                <!-- Boshqaruv vositalari satri (Toolbar) -->
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                    
+                    <!-- Chap: Tanlangan manba va Jonli holat -->
+                    <div class="flex items-center gap-3">
+                        <span id="liveBadge" class="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-3 py-1.5 text-xs font-semibold">
+                            <span class="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
+                            <span id="currentStreamTitle">Stream tanlanmagan</span>
+                        </span>
+                        <span class="text-xs text-slate-400 font-mono hidden sm:inline" id="streamMetrics">FPS: ~12 | Kechikish: ~20ms</span>
+                    </div>
+
+                    <!-- O'ng: Amallar (Skrinshot, To'liq ekran, Mening ekranim) -->
+                    <div class="flex items-center flex-wrap gap-2">
+                        <!-- Mening ekranim -->
+                        <button type="button" id="showOwnScreenButton" data-stream-id="user-{{ account_id }}" class="inline-flex items-center gap-2 rounded-xl border border-indigo-400/40 bg-indigo-500/10 hover:bg-indigo-500/25 px-3 py-2 text-xs font-semibold text-indigo-300 transition">
+                            <i class="fa-solid fa-camera-rotate"></i>
+                            <span id="ownScreenBtnText">Mening ekranim</span>
+                        </button>
+
+                        <!-- Skrinshot olish -->
+                        <button type="button" id="takeScreenshotBtn" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 px-3 py-2 text-xs font-semibold transition" title="Hozirgi kadrni rasm qilib saqlash">
+                            <i class="fa-solid fa-camera"></i>
+                            <span>Skrinshot</span>
+                        </button>
+
+                        <!-- To'liq ekran -->
+                        <button type="button" id="expandScreenButton" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 px-3 py-2 text-xs font-semibold transition" title="To'liq ekranga yoyish">
+                            <i id="expandScreenIcon" class="fa-solid fa-expand"></i>
+                            <span id="expandScreenText">Kattalashtirish</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Jonli Ekran Ko'rish Maydoni (Viewport) -->
+                <div id="videoWrapper" class="relative bg-black rounded-2xl overflow-hidden aspect-video flex items-center justify-center border border-slate-800 shadow-2xl">
+                    <div class="scanline-effect"></div>
+                    <img id="screenStream" alt="Jonli efir" class="max-w-full max-h-full object-contain relative z-10">
+                    
+                    <!-- Standby / Kutilmoqda holati -->
+                    <div id="statusText" class="absolute z-20 text-center p-6 space-y-3">
+                        <div class="inline-flex p-4 rounded-2xl bg-slate-800/60 text-slate-400 text-3xl border border-slate-700">
+                            <i class="fa-solid fa-tv"></i>
+                        </div>
+                        <h3 class="text-slate-300 font-semibold text-base">Efirga ulanish kutilmoqda...</h3>
+                        <p class="text-xs text-slate-500 max-w-sm mx-auto">
+                            Ekranni ko'rish uchun quyidagi ro'yxatdan ulangan do'stingizni tanlang, yoki "Mening ekranim" tugmasini bosing.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Tezkor Ulanish Paneli -->
+                <div class="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-left">
+                    <span class="text-xs text-slate-400 font-medium">
+                        <i class="fa-solid fa-list-check mr-1 text-indigo-400"></i> Tezkor ulanish:
+                    </span>
+                    <div class="flex flex-wrap items-center gap-2">
+                        {% for computer in computers %}
+                        <button type="button" data-computer="{{ computer.name }}" data-online="{{ computer.is_online|yesno:'true,false' }}" data-computer-id="{% if computer.owner_id == user.id or computer.owner is None %}{{ computer.name }}{% else %}{{ computer.owner.profile.account_id }}__{{ computer.name }}{% endif %}" data-stream-id="{% if computer.owner_id == user.id or computer.owner is None %}{{ computer.name }}{% else %}{{ computer.owner.profile.account_id }}__{{ computer.name }}{% endif %}" data-stream-name="{{ computer.name }}" class="quick-stream-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition {% if computer.is_online %}bg-emerald-950/60 text-emerald-300 border border-emerald-600/40 hover:bg-emerald-900/60{% else %}bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700{% endif %}">
+                            <span class="h-2 w-2 rounded-full {% if computer.is_online %}bg-emerald-400 animate-pulse{% else %}bg-slate-500{% endif %}"></span>
+                            {{ computer.name }}
+                        </button>
+                        {% endfor %}
+
+                        {% for shared_account in shared_accounts %}
+                        {% if shared_account.owner.online_owned_computers %}
+                        <button type="button" data-computer="{{ shared_account.owner.online_owned_computers.0.name }}" data-online="true" data-computer-id="{{ shared_account.owner.profile.account_id }}__{{ shared_account.owner.online_owned_computers.0.name }}" data-stream-id="user-{{ shared_account.owner.profile.account_id }}" data-stream-name="{{ shared_account.display_name }}" class="quick-stream-chip shared-screen-select inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-950/60 text-indigo-300 border border-indigo-600/40 hover:bg-indigo-900/60 transition">
+                            <i class="fa-solid fa-user-astronaut text-[10px]"></i>
+                            {{ shared_account.display_name }}
+                        </button>
+                        {% else %}
+                        <button type="button" data-stream-id="user-{{ shared_account.owner.profile.account_id }}" data-stream-name="{{ shared_account.display_name }}" class="quick-stream-chip shared-screen-select inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-950/60 text-indigo-300 border border-indigo-600/40 hover:bg-indigo-900/60 transition">
+                            <i class="fa-solid fa-user-astronaut text-[10px]"></i>
+                            {{ shared_account.display_name }}
+                        </button>
+                        {% endif %}
+                        {% empty %}
+                        <span class="text-xs text-slate-500 italic">Ulangan akkauntlar yo'q</span>
+                        {% endfor %}
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- TAB 2: MASOFAVIY TERMINAL VA BUYRUQLAR (REMOTE CONSOLE)     -->
+        <!-- ============================================================ -->
+        <div id="tab-terminal" class="tab-content hidden space-y-6">
+
+            <!-- Terminal Konsoli Bloki -->
+            <div class="bg-slate-900 border border-slate-800 rounded-3xl shadow-xl overflow-hidden">
+                
+                <!-- Terminal Window Bar -->
+                <div class="bg-slate-950 px-4 py-3 flex items-center justify-between border-b border-slate-800">
+                    <div class="flex items-center gap-2">
+                        <span class="h-3 w-3 rounded-full bg-rose-500 inline-block"></span>
+                        <span class="h-3 w-3 rounded-full bg-amber-500 inline-block"></span>
+                        <span class="h-3 w-3 rounded-full bg-emerald-500 inline-block"></span>
+                        <span class="text-xs font-mono text-slate-400 ml-2">Masofa Remote Terminal (PowerShell / CMD)</span>
+                    </div>
+                    <span class="text-xs font-mono text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-800/40">
+                        <i class="fa-solid fa-bolt mr-1"></i> Interactive
                     </span>
                 </div>
 
-                <div class="space-y-3">
-                    {% if shared_accounts %}
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {% for shared_account in shared_accounts %}
-                            <div class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3.5">
-                                <div class="text-sm">
-                                    <span class="font-semibold text-slate-800">{{ shared_account.display_name }}</span>
-                                    <span class="text-xs text-slate-500 block">({{ shared_account.owner.username }})</span>
-                                </div>
-                                <button type="button" data-stream-id="user-{{ shared_account.owner.profile.account_id }}" data-stream-name="{{ shared_account.display_name }}" class="shared-screen-select rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3 py-2 transition flex items-center gap-1.5 shadow-sm">
-                                    <i class="fa-solid fa-eye"></i> Ekranini ko'rish
-                                </button>
-                            </div>
-                            {% endfor %}
+                <!-- Terminal Output Oynasi -->
+                <div id="terminalScreen" class="terminal-window p-4 md:p-6 h-80 overflow-y-auto space-y-3 text-xs md:text-sm">
+                    <div class="text-slate-500">
+                        [Masofa Remote Shell v2.4] Tizim buyruqlari tayyor.<br>
+                        Buyruq kiriting yoki quyidagi tezkor tugmalardan foydalaning...
+                    </div>
+                </div>
+
+                <!-- Terminal Input Satri -->
+                <form id="ajaxCommandForm" class="p-3 bg-slate-950/90 border-t border-slate-800 flex items-center gap-2">
+                    {% csrf_token %}
+                    <span class="text-emerald-400 font-mono text-xs md:text-sm pl-2 select-none">&gt;</span>
+                    <input type="text" id="terminalInput" name="command_text" placeholder="Masalan: tasklist, dir, ipconfig..." required autocomplete="off"
+                        class="flex-1 bg-transparent border-0 text-slate-100 font-mono text-xs md:text-sm focus:outline-none focus:ring-0 placeholder:text-slate-600">
+                    <button type="submit" id="terminalSendBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition flex items-center gap-1.5 shadow-md">
+                        <i class="fa-solid fa-paper-plane"></i> Yuborish
+                    </button>
+                </form>
+            </div>
+
+            <!-- Tezkor Buyruqlar (Quick Action Shortcuts) -->
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                        <i class="fa-solid fa-bolt text-amber-500"></i> Tezkor Buyruqlar (1-bosishda bajarish)
+                    </h3>
+                    <span class="text-xs text-slate-400">Tugmani bosganda buyruq darhol yuboriladi</span>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <button type="button" data-cmd="systeminfo" class="quick-cmd-btn text-left p-3 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition space-y-1">
+                        <div class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <i class="fa-solid fa-circle-info text-blue-500"></i> systeminfo
                         </div>
-                    {% else %}
-                        <p class="rounded-xl border border-dashed border-slate-300 px-3 py-4 text-sm text-slate-500">Hali akkaunt ulanmagan.</p>
-                    {% endif %}
+                        <p class="text-[11px] text-slate-500">Tizim va apparat ma'lumotlari</p>
+                    </button>
+
+                    <button type="button" data-cmd="tasklist" class="quick-cmd-btn text-left p-3 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition space-y-1">
+                        <div class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <i class="fa-solid fa-list-check text-emerald-500"></i> tasklist
+                        </div>
+                        <p class="text-[11px] text-slate-500">Faol dastur va jarayonlar</p>
+                    </button>
+
+                    <button type="button" data-cmd="ipconfig /all" class="quick-cmd-btn text-left p-3 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition space-y-1">
+                        <div class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <i class="fa-solid fa-network-wired text-purple-500"></i> ipconfig /all
+                        </div>
+                        <p class="text-[11px] text-slate-500">Tarmoq va IP konfiguratsiyasi</p>
+                    </button>
+
+                    <button type="button" data-cmd="wmic logicaldisk get size,freespace,caption" class="quick-cmd-btn text-left p-3 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition space-y-1">
+                        <div class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <i class="fa-solid fa-hard-drive text-amber-500"></i> disk info
+                        </div>
+                        <p class="text-[11px] text-slate-500">Qattiq disklar va bo'sh joy</p>
+                    </button>
+
+                    <button type="button" data-cmd="netstat -ano" class="quick-cmd-btn text-left p-3 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition space-y-1">
+                        <div class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <i class="fa-solid fa-plug text-cyan-500"></i> netstat -ano
+                        </div>
+                        <p class="text-[11px] text-slate-500">Ochiq portlar va ulanishlar</p>
+                    </button>
+
+                    <button type="button" data-cmd="dir C:\" class="quick-cmd-btn text-left p-3 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition space-y-1">
+                        <div class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <i class="fa-solid fa-folder-tree text-indigo-500"></i> dir C:\
+                        </div>
+                        <p class="text-[11px] text-slate-500">C diskdagi fayllar</p>
+                    </button>
+
+                    <button type="button" data-cmd="shutdown /r /t 60" class="quick-cmd-btn text-left p-3 rounded-xl border border-slate-200 hover:border-rose-400 hover:bg-rose-50/50 transition space-y-1">
+                        <div class="text-xs font-bold text-rose-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-rotate text-rose-500"></i> restart 60s
+                        </div>
+                        <p class="text-[11px] text-slate-500">60 soniyada qayta yuklash</p>
+                    </button>
+
+                    <button type="button" data-cmd="shutdown /a" class="quick-cmd-btn text-left p-3 rounded-xl border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition space-y-1">
+                        <div class="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-ban text-emerald-500"></i> shutdown /a
+                        </div>
+                        <p class="text-[11px] text-slate-500">O'chirishni bekor qilish</p>
+                    </button>
                 </div>
             </div>
 
-            <!-- Kompyuter ekrani (Jonli efir bloki) -->
-            <div id="streamContainerCard" class="bg-slate-900 p-4 rounded-2xl shadow-lg w-full text-center">
-                <div class="mb-4 flex items-center justify-between gap-3">
-                    <button type="button" id="showOwnScreenButton" data-stream-id="user-{{ account_id }}" class="inline-flex items-center gap-2 rounded-xl border border-emerald-400/60 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20">
-                        <i class="fa-solid fa-user text-xs"></i> Mening ekranim
-                    </button>
-                    <button type="button" id="expandScreenButton" class="inline-flex items-center gap-2 rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-slate-700" aria-label="Efirni kattalashtirish" title="Efirni kattalashtirish">
-                        <i id="expandScreenIcon" class="fa-solid fa-expand" aria-hidden="true"></i>
-                        <span id="expandScreenText">Kattalashtirish</span>
-                    </button>
+            <!-- Bajarilgan Buyruqlar Tarixi Jadvali -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left text-indigo-600"></i> Buyruqlar Tarixi
+                    </h3>
+                    {% if commands %}
+                    <a href="{% url 'clear_commands' %}" onclick="return confirm('Barcha buyruqlar tarixini tozalashni xohlaysizmi?')" class="text-xs text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1">
+                        <i class="fa-solid fa-trash-can"></i> Tarixni tozalash
+                    </a>
+                    {% endif %}
                 </div>
-                <h2 class="text-white text-lg font-semibold mb-4 flex items-center gap-2 justify-center">
-                    <i class="fa-solid fa-desktop text-emerald-400"></i> Kompyuter ekrani (Jonli efir)
-                </h2>
-                <div id="videoWrapper" class="relative bg-black rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-slate-700">
-                    <img id="screenStream" alt="Ulanish kutilmoqda..." class="max-w-full max-h-full object-contain">
-                    <div id="statusText" class="absolute text-slate-400 text-sm font-medium">Agent ulanishi kutilmoqda...</div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs md:text-sm">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-500 border-b border-slate-200 font-medium">
+                                <th class="py-3 px-4">ID</th>
+                                <th class="py-3 px-4">Buyruq matni</th>
+                                <th class="py-3 px-4">Holati</th>
+                                <th class="py-3 px-4">Vaqti</th>
+                                <th class="py-3 px-4 text-right">Amallar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="commandsTableBody" class="divide-y divide-slate-100">
+                            {% for cmd in commands %}
+                            <tr class="hover:bg-slate-50/80 transition">
+                                <td class="py-3 px-4 font-mono font-bold text-slate-500">#{{ cmd.id }}</td>
+                                <td class="py-3 px-4 font-mono text-indigo-700 font-semibold">{{ cmd.command_text }}</td>
+                                <td class="py-3 px-4">
+                                    {% if cmd.is_executed %}
+                                        <span class="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[11px] font-semibold px-2.5 py-0.5 rounded-full">
+                                            <i class="fa-solid fa-check"></i> Bajarildi
+                                        </span>
+                                    {% else %}
+                                        <span class="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-[11px] font-semibold px-2.5 py-0.5 rounded-full">
+                                            <i class="fa-solid fa-spinner animate-spin"></i> Kutilmoqda
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 px-4 text-slate-500 text-xs">{{ cmd.created_at|date:"Y-m-d H:i:s" }}</td>
+                                <td class="py-3 px-4 text-right">
+                                    {% if cmd.output_result %}
+                                    <button type="button" data-cmd-output="{{ cmd.output_result|escape }}" data-cmd-title="{{ cmd.command_text|escape }}" class="view-output-btn bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3 py-1.5 rounded-lg transition inline-flex items-center gap-1">
+                                        <i class="fa-solid fa-file-lines text-indigo-600"></i> Natijani ko'rish
+                                    </button>
+                                    {% else %}
+                                    <span class="text-slate-400 text-xs italic">Natija yo'q</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-8 text-slate-400">
+                                    Hozircha hech qanday buyruq yuborilmagan.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
         </div>
+
+        <!-- ============================================================ -->
+        <!-- TAB 3: VEB FILTR VA XAVFSIZLIK (WEB FILTER & ALERTS)        -->
+        <!-- ============================================================ -->
+        <div id="tab-security" class="tab-content hidden space-y-6">
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                <!-- Chap: Ruxsat berilgan saytlar (Oq ro'yxat) -->
+                <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-shield-check text-emerald-600"></i> Ruxsat Berilgan Saytlar (Oq Ro'yxat)
+                            </h3>
+                            <p class="text-xs text-slate-500 mt-1">Faqat shu ro'yxatdagi saytlarga kirishga ruxsat etiladi</p>
+                        </div>
+                        <button type="button" onclick="document.getElementById('blockSiteForm').scrollIntoView({behavior: 'smooth'})" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
+                            <i class="fa-solid fa-ban"></i> Taqiqlashga o'tish
+                        </button>
+                    </div>
+
+                    <!-- Domain qo'shish formasi -->
+                    <form method="POST" class="space-y-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_type" value="allowed_site">
+                        <div class="flex gap-2">
+                            <input type="text" name="domain" placeholder="Masalan: youtube.com yoki kun.uz" required
+                                class="flex-1 px-3.5 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                            <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm px-4 py-2.5 rounded-xl transition shadow-sm flex items-center gap-1.5">
+                                <i class="fa-solid fa-plus"></i> Qo'shish
+                            </button>
+                        </div>
+                    </form>
+
+
+                    <!-- Tezkor qo'shish toifalari -->
+                    <div class="space-y-2">
+                        <span class="text-xs font-semibold text-slate-500">Tezkor qo'shish:</span>
+                        <div class="flex flex-wrap gap-1.5">
+                            <button type="button" class="preset-site-btn text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded-lg transition" data-site="google.com">Google</button>
+                            <button type="button" class="preset-site-btn text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded-lg transition" data-site="youtube.com">YouTube</button>
+                            <button type="button" class="preset-site-btn text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded-lg transition" data-site="github.com">GitHub</button>
+                            <button type="button" class="preset-site-btn text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded-lg transition" data-site="wikipedia.org">Wikipedia</button>
+                            <button type="button" class="preset-site-btn text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded-lg transition" data-site="kun.uz">Kun.uz</button>
+                            <button type="button" class="preset-site-btn text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded-lg transition" data-site="telegram.org">Telegram</button>
+                        </div>
+                    </div>
+
+                    <!-- Ro'yxat -->
+                    <div class="space-y-2 max-h-80 overflow-y-auto pr-1">
+                        {% for site in allowed_sites %}
+                        <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                            <div class="flex items-center gap-2.5">
+                                <i class="fa-solid fa-globe text-emerald-600"></i>
+                                <span class="font-semibold text-slate-800 text-sm">{{ site.domain }}</span>
+                            </div>
+                            <a href="{% url 'delete_allowed_site' site.id %}" onclick="return confirm('Haqiqatan ham {{ site.domain }} saytini o\'chirmoqchimisiz?')" class="text-rose-500 hover:text-rose-700 p-1.5 rounded-lg transition" title="O'chirish">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </a>
+                        </div>
+                        {% empty %}
+                        <p class="text-xs text-slate-400 text-center py-6 border border-dashed border-slate-200 rounded-xl">Hozircha saytlar qo'shilmagan.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- O'ng: Taqiqlangan saytlarga kirish ogohlantirishlari -->
+                <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center gap-3">
+                            <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-ban text-rose-600"></i> Taqiqlangan Saytlar (Qora Ro'yxat)
+                            </h3>
+                            <button type="button" onclick="blockSitePrompt()" class="bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs px-3 py-1.5 rounded-lg transition shadow-sm flex items-center gap-1.5">
+                                <i class="fa-solid fa-plus"></i> Saytni taqiqlash
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Taqiqlanganlar ro'yxati -->
+                    <div class="space-y-2 max-h-60 overflow-y-auto pr-1 mb-6">
+                        {% for site in blocked_sites %}
+                        <div class="flex items-center justify-between p-3 rounded-xl bg-rose-50 border border-rose-100">
+                            <div class="flex items-center gap-2.5">
+                                <i class="fa-solid fa-circle-xmark text-rose-600"></i>
+                                <span class="font-semibold text-slate-800 text-sm">{{ site.domain }}</span>
+                            </div>
+                            <a href="{% url 'delete_blocked_site' site.id %}" onclick="return confirm('Taqiqni olib tashlamoqchimisiz?')" class="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg transition" title="Taqiqni olib tashlash">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </a>
+                        </div>
+                        {% empty %}
+                        <p class="text-xs text-slate-400 text-center py-4 border border-dashed border-slate-200 rounded-xl">Hozircha taqiqlangan saytlar yo'q.</p>
+                        {% endfor %}
+                    </div>
+
+                    <div class="border-t border-slate-100 pt-5">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                                    <i class="fa-solid fa-triangle-exclamation text-rose-500"></i> Xavfsizlik Signallari (Alerts)
+                                </h3>
+                                <p class="text-xs text-slate-500 mt-1">Ruxsatsiz saytlarga urinishlar jurnali</p>
+                            </div>
+                            {% if warnings %}
+                            <a href="{% url 'clear_warnings' %}" onclick="return confirm('Barcha ogohlantirishlar tarixini tozalashni xohlaysizmi?')" class="text-xs text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1">
+                                <i class="fa-solid fa-trash-can"></i> Tozalash
+                            </a>
+                            {% endif %}
+                        </div>
+
+                        <!-- Signallar ro'yxati -->
+                        <div class="space-y-2.5 max-h-80 overflow-y-auto pr-1 mt-4">
+                            {% for warning in warnings %}
+                            <div class="p-3.5 rounded-xl border border-rose-200 bg-rose-50/60 space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-bold text-xs text-rose-800 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-ban text-rose-600"></i> {{ warning.computer_name }}
+                                    </span>
+                                    <span class="text-[11px] text-slate-400 font-mono">{{ warning.timestamp|date:"H:i:s, d-M" }}</span>
+                                </div>
+                                <div class="text-xs font-semibold text-slate-800">
+                                    Taqiqlangan domen: <span class="text-rose-700 underline font-mono">{{ warning.domain }}</span>
+                                </div>
+                                <div class="text-[11px] text-slate-500 truncate" title="{{ warning.url }}">
+                                    Havola: {{ warning.url }}
+                                </div>
+                            </div>
+                            {% empty %}
+                            <div class="text-center py-10 space-y-2 border border-dashed border-slate-200 rounded-xl">
+                                <i class="fa-solid fa-shield-cat text-3xl text-emerald-500"></i>
+                                <p class="text-sm font-semibold text-slate-700">Qoidabuzarliklar mavjud emas</p>
+                                <p class="text-xs text-slate-400">Ulangan kompyuterlar faqat ruxsat berilgan saytlardan foydalanmoqda.</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- TAB 4: HAMKORLIK VA ID ULASHISH (ACCOUNT SHARING)           -->
+        <!-- ============================================================ -->
+        <div id="tab-sharing" class="tab-content hidden space-y-6">
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                <!-- Chap: Mening Maxsus 20 Xonali IDim -->
+                <div class="bg-gradient-to-br from-indigo-700 to-indigo-900 text-white p-6 rounded-3xl shadow-xl space-y-5">
+                    <div class="flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-id-card text-amber-300"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-base">Mening Maxsus IDim</h3>
+                            <p class="text-xs text-indigo-200">Ushbu ID orqali sizga ulanishadi</p>
+                        </div>
+                    </div>
+
+                    {% if account_id %}
+                    <div class="bg-black/30 border border-white/10 rounded-2xl p-4 text-center space-y-3">
+                        <span class="text-xs text-indigo-300 uppercase font-semibold tracking-wider block">20 Xonali Maxsus ID</span>
+                        <code id="accountIdValue" class="block font-mono text-lg font-bold text-emerald-300 tracking-wider break-all select-all">{{ account_id }}</code>
+                        <button type="button" id="copyAccountId" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-2.5 px-4 rounded-xl transition flex items-center justify-center gap-2 shadow-md">
+                            <i class="fa-solid fa-copy"></i> ID-dan Nusxa Olish
+                        </button>
+                    </div>
+                    <p id="accountIdCopyStatus" class="text-xs text-emerald-300 text-center min-h-4 font-medium" aria-live="polite"></p>
+                    {% endif %}
+
+                    <!-- Ulashish qoidasi -->
+                    <div class="text-xs text-indigo-200/80 bg-white/5 rounded-xl p-3 space-y-1 border border-white/10">
+                        <p class="font-semibold text-white">Qanday ishlaydi?</p>
+                        <p>1. ID-ingizni nusxalab, hamkoringizga yuboring.</p>
+                        <p>2. U o'z panelidagi "ID orqali ulash" formasiga kiritadi.</p>
+                        <p>3. U sizning ekranni kuzatish imkoniyatiga ega bo'ladi.</p>
+                    </div>
+                </div>
+
+                <!-- O'ng: ID orqali ulash formasi va Ulanganlar ro'yxati -->
+                <div class="lg:col-span-2 space-y-6">
+                    
+                    <!-- Ulash Formasi -->
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-user-plus text-indigo-600"></i> Yangi Foydalanuvchini Ulash
+                            </h3>
+                            <span class="text-xs font-semibold px-2.5 py-1 rounded-full {% if can_add_shared_account %}bg-indigo-100 text-indigo-700{% else %}bg-amber-100 text-amber-700{% endif %}">
+                                Limit: {{ shared_account_count }}/{{ max_shared_accounts }}
+                            </span>
+                        </div>
+
+                        <form method="POST" class="space-y-4">
+                            {% csrf_token %}
+                            <input type="hidden" name="form_type" value="share_access">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">Do'stingiz yoki Kompyuter nomi</label>
+                                    <input type="text" name="share_name" placeholder="Masalan: Sherbek (Toshkent ofis)" maxlength="100" required
+                                        class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">Uning 20 xonali IDsi</label>
+                                    <input type="text" name="share_id" placeholder="20 xonali raqamli ID" inputmode="numeric" minlength="20" maxlength="20" pattern="[0-9]{20}" required
+                                        class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-mono">
+                                </div>
+                            </div>
+                            <button type="submit" {% if not can_add_shared_account %}disabled{% endif %}
+                                class="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold text-xs sm:text-sm py-2.5 px-6 rounded-xl transition shadow-md flex items-center gap-2">
+                                <i class="fa-solid fa-link"></i> Akkauntni Ulash
+                            </button>
+                        </form>
+
+                        {% if not can_add_shared_account %}
+                        <p class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                            Ulanish limiti to'ldi. Ko'pi bilan 3 ta akkaunt ulash mumkin.
+                        </p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Ulangan Akkauntlar Ro'yxati -->
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                        <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-users text-indigo-600"></i> Hozirda Ulangan Akkauntlar
+                        </h3>
+
+                        <div class="space-y-3">
+                            {% for shared_account in shared_accounts %}
+                            <div class="flex flex-wrap items-center justify-between p-4 rounded-xl border border-slate-200 bg-slate-50 gap-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="h-10 w-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm">
+                                        {{ shared_account.display_name|slice:":1"|upper }}
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-slate-800 text-sm">{{ shared_account.display_name }}</h4>
+                                        <p class="text-xs text-slate-500 font-mono">Foydalanuvchi: {{ shared_account.owner.username }}</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    {% if shared_account.owner.online_owned_computers %}
+                                    <button type="button" data-computer="{{ shared_account.owner.online_owned_computers.0.name }}" data-online="true" data-computer-id="{{ shared_account.owner.profile.account_id }}__{{ shared_account.owner.online_owned_computers.0.name }}" data-stream-id="user-{{ shared_account.owner.profile.account_id }}" data-stream-name="{{ shared_account.display_name }}" class="watch-shared-btn shared-screen-select bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm">
+                                        <i class="fa-solid fa-eye"></i> Ekranni ko'rish
+                                    </button>
+                                    {% else %}
+                                    <button type="button" data-stream-id="user-{{ shared_account.owner.profile.account_id }}" data-stream-name="{{ shared_account.display_name }}" class="watch-shared-btn shared-screen-select bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm">
+                                        <i class="fa-solid fa-eye"></i> Ekranni ko'rish
+                                    </button>
+                                    {% endif %}
+                                    <a href="{% url 'delete_share' shared_account.id %}" onclick="return confirm('Haqiqatan ham {{ shared_account.display_name }} bilan aloqani uzmoqchimisiz?')" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5" title="Aloqani uzish">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </a>
+                                </div>
+                            </div>
+                            {% empty %}
+                            <div class="text-center py-8 border border-dashed border-slate-300 rounded-xl text-slate-400">
+                                Hozircha hech qanday akkaunt ulanmagan.
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
     </main>
+
+    <!-- ============================================================ -->
+    <!-- MODALLAR (MODAL DIALOGS)                                     -->
+    <!-- ============================================================ -->
+
+    <!-- Modal: Buyruq Natijasini To'liq Ko'rish Modali -->
+    <div id="outputModal" class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[85vh]">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+                <h3 id="outputModalTitle" class="text-sm font-bold text-slate-800 font-mono truncate">Buyruq natijasi</h3>
+                <button type="button" id="closeOutputModal" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1 bg-slate-900 text-slate-200">
+                <pre id="outputModalBody" class="font-mono text-xs md:text-sm whitespace-pre-wrap select-all leading-relaxed"></pre>
+            </div>
+            <div class="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+                <button type="button" id="copyOutputModalBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm">
+                    <i class="fa-solid fa-copy"></i> Nusxa olish
+                </button>
+                <button type="button" id="closeOutputModalBtn2" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold px-4 py-2 rounded-xl transition">
+                    Yopish
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Bildirishnomasi -->
+    <div id="toastNotification" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none bg-slate-900 text-white border border-slate-700 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs sm:text-sm">
+        <i id="toastIcon" class="fa-solid fa-check text-emerald-400"></i>
+        <span id="toastMessage">Xabar</span>
+    </div>
 
     <!-- Footer -->
     <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500 mt-auto">
-        &copy; 2026 Masofaviy Boshqaruv Tizimi. Barcha huquqlar himoyalangan.
+        &copy; 2026 Masofaviy Boshqaruv Markazi (Masofa RMM). Barcha huquqlar himoyalangan.
     </footer>
 
+    <!-- ============================================================ -->
+    <!-- INTERAKTIV JAVASCRIPT VA WEBSOCKET DASTURI                   -->
+    <!-- ============================================================ -->
     <script>
-        const sharedScreenButtons = document.querySelectorAll('.shared-screen-select');
-        const ownScreenButton = document.getElementById('showOwnScreenButton');
+        // DOM Elements
+        const tabButtons = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
         const statusText = document.getElementById('statusText');
         const screenStream = document.getElementById('screenStream');
-        const copyAccountIdButton = document.getElementById('copyAccountId');
-        const themeToggleButton = document.getElementById('themeToggle');
-        const themeIcon = document.getElementById('themeIcon');
-        const themeText = document.getElementById('themeText');
+        const currentStreamTitle = document.getElementById('currentStreamTitle');
+        const ownScreenButton = document.getElementById('showOwnScreenButton');
+        const ownScreenBtnText = document.getElementById('ownScreenBtnText');
         const expandScreenButton = document.getElementById('expandScreenButton');
         const expandScreenIcon = document.getElementById('expandScreenIcon');
         const expandScreenText = document.getElementById('expandScreenText');
         const streamContainerCard = document.getElementById('streamContainerCard');
+        const takeScreenshotBtn = document.getElementById('takeScreenshotBtn');
+        const themeToggleButton = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        const themeText = document.getElementById('themeText');
+        const copyAccountIdBtn = document.getElementById('copyAccountId');
+        const copyNavIdBtn = document.getElementById('copyNavIdBtn');
+        const outputModal = document.getElementById('outputModal');
+        const outputModalTitle = document.getElementById('outputModalTitle');
+        const outputModalBody = document.getElementById('outputModalBody');
+        const closeOutputModal = document.getElementById('closeOutputModal');
+        const closeOutputModalBtn2 = document.getElementById('closeOutputModalBtn2');
+        const copyOutputModalBtn = document.getElementById('copyOutputModalBtn');
+        const terminalScreen = document.getElementById('terminalScreen');
+        const terminalInput = document.getElementById('terminalInput');
+        const ajaxCommandForm = document.getElementById('ajaxCommandForm');
+
+        // WebSocket & Stream Variables
         let socket = null;
         let publisherSocket = null;
         let captureStream = null;
         let frameTimer = null;
+        let currentStreamName = '';
 
+        // Toast Helper
+        function showToast(message, icon = 'fa-check text-emerald-400') {
+            const toast = document.getElementById('toastNotification');
+            const toastMsg = document.getElementById('toastMessage');
+            const toastIco = document.getElementById('toastIcon');
+            toastMsg.innerText = message;
+            toastIco.className = `fa-solid ${icon}`;
+            toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+            }, 3200);
+        }
+
+        // 1. TEMA BOSHQARUVI (DARK / LIGHT MODE)
         function setTheme(isDark) {
             document.documentElement.classList.toggle('theme-dark', isDark);
             localStorage.setItem('theme', isDark ? 'dark' : 'light');
-            themeIcon.className = isDark ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+            themeIcon.className = isDark ? 'fa-solid fa-sun text-amber-300' : 'fa-solid fa-moon text-indigo-300';
             themeText.innerText = isDark ? 'Kunduzgi rejim' : 'Tungi rejim';
-            themeToggleButton.setAttribute('aria-label', isDark ? 'Kunduzgi rejimni yoqish' : 'Tungi rejimni yoqish');
         }
-
         setTheme(localStorage.getItem('theme') === 'dark');
         themeToggleButton.addEventListener('click', () => {
             setTheme(!document.documentElement.classList.contains('theme-dark'));
         });
 
-        expandScreenButton.addEventListener('click', async () => {
-            try {
-                if (document.fullscreenElement === streamContainerCard) {
-                    await document.exitFullscreen();
+        // 2. TABLARNI ALMASHTIRISH (TAB SWITCHING)
+        function switchTab(tabId) {
+            tabButtons.forEach(btn => {
+                const isActive = btn.dataset.tab === tabId;
+                if (isActive) {
+                    btn.classList.add('bg-indigo-600', 'text-white', 'shadow-sm');
+                    btn.classList.remove('text-slate-600', 'hover:bg-slate-100');
                 } else {
-                    await streamContainerCard.requestFullscreen();
+                    btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-sm');
+                    btn.classList.add('text-slate-600', 'hover:bg-slate-100');
                 }
-            } catch (error) {
-                statusText.innerText = 'To\'liq ekran rejimini yoqib bo\'lmadi.';
-                statusText.style.display = 'block';
-            }
-        });
+            });
+            tabContents.forEach(content => {
+                if (content.id === tabId) {
+                    content.classList.remove('hidden');
+                } else {
+                    content.classList.add('hidden');
+                }
+            });
+            localStorage.setItem('active_tab', tabId);
+        }
 
-        document.addEventListener('fullscreenchange', () => {
-            const isFullscreen = document.fullscreenElement === streamContainerCard;
-            expandScreenIcon.className = isFullscreen ? 'fa-solid fa-compress' : 'fa-solid fa-expand';
-            expandScreenText.innerText = isFullscreen ? 'Kichraytirish' : 'Kattalashtirish';
-            expandScreenButton.setAttribute('aria-label', isFullscreen ? 'Efirni kichraytirish' : 'Efirni kattalashtirish');
-            expandScreenButton.title = isFullscreen ? 'Efirni kichraytirish' : 'Efirni kattalashtirish';
+        tabButtons.forEach(btn => {
+            btn.addEventListener('click', () => switchTab(btn.dataset.tab));
         });
+        const savedTab = localStorage.getItem('active_tab');
+        if (savedTab && document.getElementById(savedTab)) {
+            switchTab(savedTab);
+        } else {
+            switchTab('tab-screen');
+        }
 
+        // 3. JONLI EKRAN TOMOSHA QILISH (WEBSOCKET VIEWER)
         function openScreenViewer(streamKey, streamName) {
             if (socket) socket.close();
+            currentStreamName = streamName;
+            currentStreamTitle.innerText = streamName;
 
             const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
             const wsUrl = wsProtocol + window.location.host + '/ws/screen/' + encodeURIComponent(streamKey) + '/?role=viewer';
 
             socket = new WebSocket(wsUrl);
             socket.binaryType = 'blob';
+
             socket.onopen = function () {
-                statusText.innerText = 'Jonli efirga ulanildi: ' + streamName;
-                statusText.style.display = 'block';
+                statusText.style.display = 'none';
+                showToast(`Efirga ulanildi: ${streamName}`);
             };
             socket.onmessage = function (event) {
                 const blob = event.data instanceof Blob ? event.data : new Blob([event.data], { type: 'image/jpeg' });
@@ -325,40 +962,57 @@
                 statusText.style.display = 'none';
             };
             socket.onclose = function () {
-                statusText.innerText = 'Aloqa uzildi yoki foydalanuvchi oflayn.';
+                statusText.innerHTML = `
+                    <div class="inline-flex p-4 rounded-2xl bg-slate-800/60 text-slate-400 text-3xl border border-slate-700">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
+                    </div>
+                    <h3 class="text-slate-300 font-semibold text-base">${streamName} bilan aloqa uzildi</h3>
+                    <p class="text-xs text-slate-500">Foydalanuvchi oflayn yoki boshqa efirni tanlang.</p>
+                `;
                 statusText.style.display = 'block';
             };
             socket.onerror = function () {
-                statusText.innerText = 'Ulanishda xatolik yuz berdi.';
+                statusText.innerHTML = `
+                    <div class="inline-flex p-4 rounded-2xl bg-slate-800/60 text-slate-400 text-3xl border border-slate-700">
+                        <i class="fa-solid fa-circle-xmark text-rose-500"></i>
+                    </div>
+                    <h3 class="text-slate-300 font-semibold text-base">Ulanishda xatolik</h3>
+                `;
                 statusText.style.display = 'block';
             };
         }
 
+        // Stream chipslari
+        document.querySelectorAll('.quick-stream-chip, .watch-shared-btn, .shared-screen-select').forEach(btn => {
+            btn.addEventListener('click', () => {
+                switchTab('tab-screen');
+                openScreenViewer(btn.dataset.streamId, btn.dataset.streamName);
+            });
+        });
+
+        // 4. MENING EKRANIMNI ULASHISH (BROWSER GETDISPLAYMEDIA)
         function stopOwnScreen() {
             if (frameTimer) {
                 clearInterval(frameTimer);
                 frameTimer = null;
             }
             if (captureStream) {
-                captureStream.getTracks().forEach((track) => track.stop());
+                captureStream.getTracks().forEach(track => track.stop());
                 captureStream = null;
             }
             if (publisherSocket) {
                 publisherSocket.close();
                 publisherSocket = null;
             }
-            ownScreenButton.innerHTML = '<i class="fa-solid fa-user text-xs"></i> Mening ekranim';
-            statusText.innerText = 'Efir to\'xtatildi.';
-            statusText.style.display = 'block';
+            ownScreenBtnText.innerText = 'Mening ekranim';
+            showToast('Mening ekranim efiri to\'xtatildi');
         }
 
         async function startOwnScreen() {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-                statusText.innerText = 'Brauzeringiz ekran ulashishni qo\'llab-quvvatlamaydi.';
-                statusText.style.display = 'block';
+                alert('Brauzeringiz ekran ulashishni qo\'llab-quvvatlamaydi.');
                 return;
             }
-
             try {
                 captureStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
                 const video = document.createElement('video');
@@ -371,14 +1025,15 @@
                 const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
                 const wsUrl = wsProtocol + window.location.host + '/ws/screen/' + encodeURIComponent(ownScreenButton.dataset.streamId) + '/?role=publisher';
                 publisherSocket = new WebSocket(wsUrl);
-                await new Promise((resolve, reject) => {
-                    publisherSocket.onopen = resolve;
-                    publisherSocket.onerror = reject;
+                await new Promise((res, rej) => {
+                    publisherSocket.onopen = res;
+                    publisherSocket.onerror = rej;
                 });
 
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 openScreenViewer(ownScreenButton.dataset.streamId, 'Mening ekranim');
+
                 let framePending = false;
                 frameTimer = setInterval(() => {
                     if (publisherSocket.readyState !== WebSocket.OPEN || framePending || !video.videoWidth) return;
@@ -392,38 +1047,14 @@
                     }, 'image/jpeg', 0.65);
                 }, 100);
 
-                ownScreenButton.innerHTML = '<i class="fa-solid fa-stop text-xs"></i> Efirni to\'xtatish';
-                statusText.innerText = 'Ekraningiz jonli efirda uzatilmoqda.';
-                statusText.style.display = 'block';
+                ownScreenBtnText.innerText = 'To\'xtatish';
+                showToast('Ekraningiz jonli efirga uzatilmoqda!');
                 captureStream.getVideoTracks()[0].addEventListener('ended', stopOwnScreen, { once: true });
-            } catch (error) {
+            } catch (err) {
                 stopOwnScreen();
-                statusText.innerText = error.name === 'NotAllowedError'
-                    ? 'Ekran ulashishga ruxsat berilmadi.'
-                    : 'Ekran efirini boshlashda xatolik yuz berdi.';
-                statusText.style.display = 'block';
+                showToast('Ekran ulashish bekor qilindi', 'fa-triangle-exclamation text-amber-400');
             }
         }
-
-        if (copyAccountIdButton) {
-            copyAccountIdButton.addEventListener('click', async () => {
-                const accountId = document.getElementById('accountIdValue').innerText.trim();
-                const copyStatus = document.getElementById('accountIdCopyStatus');
-                try {
-                    await navigator.clipboard.writeText(accountId);
-                    copyStatus.innerText = 'ID nusxalandi!';
-                    setTimeout(() => { copyStatus.innerText = ''; }, 3000);
-                } catch (error) {
-                    copyStatus.innerText = 'Nusxalashda xatolik yuz berdi.';
-                }
-            });
-        }
-
-        sharedScreenButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                openScreenViewer(button.dataset.streamId, button.dataset.streamName);
-            });
-        });
 
         if (ownScreenButton) {
             ownScreenButton.addEventListener('click', () => {
@@ -434,6 +1065,194 @@
                 }
             });
         }
+
+        // 5. SKRINSHOT OLISH (TAKE SCREENSHOT)
+        takeScreenshotBtn.addEventListener('click', () => {
+            if (!screenStream.src || screenStream.src.length < 50) {
+                showToast('Skrinshot olish uchun jonli efir yoqilgan bo\'lishi kerak', 'fa-circle-xmark text-rose-400');
+                return;
+            }
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = screenStream.naturalWidth || 1920;
+                canvas.height = screenStream.naturalHeight || 1080;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(screenStream, 0, 0, canvas.width, canvas.height);
+                
+                const link = document.createElement('a');
+                link.download = `Masofa_Screenshot_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_')}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                showToast('Skrinshot muvaffaqiyatli saqlandi!');
+            } catch (err) {
+                showToast('Skrinshot saqlashda xatolik', 'fa-circle-xmark text-rose-400');
+            }
+        });
+
+        // 6. TO'LIQ EKRAN REJIMI (FULLSCREEN)
+        expandScreenButton.addEventListener('click', async () => {
+            try {
+                if (document.fullscreenElement === streamContainerCard) {
+                    await document.exitFullscreen();
+                } else {
+                    await streamContainerCard.requestFullscreen();
+                }
+            } catch (e) {}
+        });
+
+        document.addEventListener('fullscreenchange', () => {
+            const isFull = document.fullscreenElement === streamContainerCard;
+            expandScreenIcon.className = isFull ? 'fa-solid fa-compress' : 'fa-solid fa-expand';
+            expandScreenText.innerText = isFull ? 'Kichraytirish' : 'Kattalashtirish';
+        });
+
+        // 7. NUSXA OLISH FUNKSIYALARI (COPY HELPERS)
+        async function copyText(text, successMsg) {
+            try {
+                await navigator.clipboard.writeText(text);
+                showToast(successMsg);
+            } catch (e) {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                ta.remove();
+                showToast(successMsg);
+            }
+        }
+
+        if (copyAccountIdBtn) {
+            copyAccountIdBtn.addEventListener('click', () => {
+                const val = document.getElementById('accountIdValue').innerText.trim();
+                copyText(val, 'Maxsus ID nusxalandi!');
+            });
+        }
+        if (copyNavIdBtn) {
+            copyNavIdBtn.addEventListener('click', () => {
+                const fullText = copyNavIdBtn.innerText;
+                const idVal = fullText.replace(/[^0-9]/g, '');
+                copyText(idVal, 'Maxsus ID nusxalandi!');
+            });
+        }
+
+        // 8. INTERAKTIV TERMINAL VA AJAX BUYRUQ YUBORISH
+        function appendTerminalLog(sender, text, isError = false) {
+            const row = document.createElement('div');
+            row.className = isError ? 'text-rose-400 font-mono' : 'text-slate-200 font-mono';
+            
+            const time = new Date().toLocaleTimeString();
+            if (sender === 'USER') {
+                row.innerHTML = `<span class="text-emerald-400">[${time}] PS C:\\Masofa\\Remote&gt;</span> <span class="text-amber-200 font-bold">${escapeHtml(text)}</span>`;
+            } else if (sender === 'SYSTEM') {
+                row.innerHTML = `<span class="text-indigo-400">[${time}] SYSTEM:</span> ${escapeHtml(text)}`;
+            } else {
+                row.innerHTML = `<div class="bg-black/50 p-2.5 rounded-lg border border-slate-800 text-sky-300 whitespace-pre-wrap select-all">${escapeHtml(text)}</div>`;
+            }
+            terminalScreen.appendChild(row);
+            terminalScreen.scrollTop = terminalScreen.scrollHeight;
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        async function sendTerminalCommand(cmdText) {
+            if (!cmdText.trim()) return;
+            appendTerminalLog('USER', cmdText);
+            appendTerminalLog('SYSTEM', 'Buyruq navbatga qo\'yildi, agent bajarishi kutilmoqda...');
+
+            try {
+                const formData = new FormData();
+                formData.append('command_text', cmdText);
+                formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+                const res = await fetch("{% url 'ajax_send_command' %}", {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    pollCommandStatus(data.command_id);
+                } else {
+                    appendTerminalLog('SYSTEM', 'Xatolik: ' + (data.message || 'Buyruq yuborilmadi'), true);
+                }
+            } catch (err) {
+                appendTerminalLog('SYSTEM', 'Serverga ulanishda xatolik yuz berdi.', true);
+            }
+        }
+
+        function pollCommandStatus(commandId) {
+            let attempts = 0;
+            const pollInterval = setInterval(async () => {
+                attempts++;
+                if (attempts > 30) {
+                    clearInterval(pollInterval);
+                    appendTerminalLog('SYSTEM', 'Kutilgan vaqt chegarasi tugadi (Agent 30 soniyada javob bermadi).', true);
+                    return;
+                }
+                try {
+                    const res = await fetch(`/api/ajax-command-status/${commandId}/`);
+                    const data = await res.json();
+                    if (data.is_executed) {
+                        clearInterval(pollInterval);
+                        appendTerminalLog('AGENT', data.output_result || '[Buyruq bajarildi, javob matni yo\'q]');
+                        showToast('Terminal buyrug\'i bajarildi!');
+                    }
+                } catch (e) {}
+            }, 1200);
+        }
+
+        if (ajaxCommandForm) {
+            ajaxCommandForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const cmd = terminalInput.value;
+                terminalInput.value = '';
+                sendTerminalCommand(cmd);
+            });
+        }
+
+        // Tezkor buyruq tugmalari
+        document.querySelectorAll('.quick-cmd-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const cmd = btn.dataset.cmd;
+                switchTab('tab-terminal');
+                sendTerminalCommand(cmd);
+            });
+        });
+
+        // 9. MODALLAR (NATIJANI KO'RISH)
+        document.querySelectorAll('.view-output-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                outputModalTitle.innerText = `Buyruq: ${btn.dataset.cmdTitle}`;
+                outputModalBody.innerText = btn.dataset.cmdOutput;
+                outputModal.classList.remove('hidden');
+                outputModal.classList.add('flex');
+            });
+        });
+        const closeOut = () => {
+            outputModal.classList.add('hidden');
+            outputModal.classList.remove('flex');
+        };
+        if (closeOutputModal) closeOutputModal.addEventListener('click', closeOut);
+        if (closeOutputModalBtn2) closeOutputModalBtn2.addEventListener('click', closeOut);
+        if (copyOutputModalBtn) {
+            copyOutputModalBtn.addEventListener('click', () => {
+                copyText(outputModalBody.innerText, 'Buyruq natijasi nusxalandi!');
+            });
+        }
+
+        // 10. TEZKOR VEB SAYT TOIFALARI (QUICK PRESET SITES)
+        document.querySelectorAll('.preset-site-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const domainInput = document.querySelector('input[name="domain"]');
+                if (domainInput) {
+                    domainInput.value = btn.dataset.site;
+                    domainInput.focus();
+                }
+            });
+        });
     </script>
 </body>
 </html>

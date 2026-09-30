@@ -67,6 +67,14 @@ class AllowedSite(models.Model):
         return self.domain
 
 
+class BlockedSite(models.Model):
+    domain = models.CharField(max_length=255, unique=True, help_text="Masalan: facebook.com")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.domain
+
+
 class SiteWarning(models.Model):
     computer_name = models.CharField(max_length=255, default="Noma'lum kompyuter", help_text="Kompyuter nomi yoki egasi")
     url = models.TextField(help_text="Foydalanuvchi kirmoqchi bo'lgan to'liq havola")

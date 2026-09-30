@@ -3,35 +3,17 @@ from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.db.models import Prefetch, Q
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from .models import Command, AllowedSite, SiteWarning, Computer, SharedAccount, UserProfile
+from .models import Command, AllowedSite, BlockedSite, SiteWarning, Computer, SharedAccount, UserProfile
 from .serializers import CommandSerializer
 
 MAX_SHARED_ACCOUNTS = 3
 
 
-def ensure_demo_computers():
-    default_names = [
-        "PC-01",
-        "PC-02",
-        "PC-03",
-        "PC-04",
-        "PC-05",
-    ]
-    for index, name in enumerate(default_names, start=1):
-        Computer.objects.get_or_create(
-            name=name,
-            defaults={
-                "ip_address": f"192.168.1.{index + 10}",
-                "username": f"agent{index}",
-                "password": f"agentpass{index}",
-                "is_online": index % 2 == 1,
-                "status_text": "Online" if index % 2 == 1 else "Offline",
-            },
-        )
 
 # ==========================================
 # 1. VEB-INTERFEYS (HTML) QISMI
@@ -103,7 +85,6 @@ def admin_create_view(request):
 
 @login_required(login_url='login')
 def index_view(request):
-
     if request.method == "POST":
         form_type = request.POST.get("form_type")
 
@@ -112,13 +93,21 @@ def index_view(request):
             if command_text:
                 Command.objects.create(
                     user=request.user if request.user.is_authenticated else None,
-                    command_text=command_text
+                    command_text=command_text.strip()
                 )
+                messages.success(request, 'Buyruq kompyuterga yuborildi.')
         elif form_type == "allowed_site":
             domain = request.POST.get("domain")
             if domain:
                 domain = domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
                 AllowedSite.objects.get_or_create(domain=domain)
+                messages.success(request, f'{domain} oq ro\'yxatga qo\'shildi.')
+        elif form_type == "blocked_site":
+            domain = request.POST.get("domain")
+            if domain:
+                domain = domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
+                BlockedSite.objects.get_or_create(domain=domain)
+                messages.success(request, f'{domain} qora ro\'yxatga (taqiqlandi) qo\'shildi.')
         elif form_type == "computer":
             computer_name = (request.POST.get("computer_name") or "").strip()
             ip_address = (request.POST.get("computer_ip") or "").strip() or "127.0.0.1"
@@ -143,6 +132,7 @@ def index_view(request):
                     computer.is_online = True
                     computer.status_text = "Online"
                     computer.save(update_fields=['ip_address', 'username', 'password', 'is_online', 'status_text'])
+                messages.success(request, f'{computer_name} kompyuteri saqlandi.')
         elif form_type == "share_access":
             share_id = (request.POST.get("share_id") or "").strip()
             share_name = (request.POST.get("share_name") or "").strip()
@@ -177,12 +167,14 @@ def index_view(request):
 
         return redirect('home')
 
-    ensure_demo_computers()
-
     commands = Command.objects.filter(user=request.user).order_by('-created_at')
     allowed_sites = AllowedSite.objects.all().order_by('-created_at')
+    blocked_sites = BlockedSite.objects.all().order_by('-created_at')
     warnings = SiteWarning.objects.all().order_by('-timestamp')
-    computers = Computer.objects.filter(Q(owner=request.user) | Q(shared_with=request.user)).distinct().order_by('name')
+    computers = Computer.objects.filter(
+        Q(owner=request.user) | Q(shared_with=request.user)
+    ).distinct().order_by('name')
+
     shared_accounts = SharedAccount.objects.filter(recipient=request.user).select_related('owner').prefetch_related(
         Prefetch(
             'owner__owned_computers',
@@ -194,9 +186,17 @@ def index_view(request):
     selected_computer = computers.first()
     user_profile = UserProfile.objects.filter(user=request.user).first()
 
+    total_computers = computers.count()
+    online_computers = sum(1 for c in computers if c.is_online)
+    total_commands = commands.count()
+    total_warnings = warnings.count()
+    total_allowed_sites = allowed_sites.count()
+    total_blocked_sites = blocked_sites.count()
+
     context = {
         'commands': commands,
         'allowed_sites': allowed_sites,
+        'blocked_sites': blocked_sites,
         'warnings': warnings,
         'computers': computers,
         'shared_accounts': shared_accounts,
@@ -206,14 +206,158 @@ def index_view(request):
         'selected_computer': selected_computer,
         'user_profile': user_profile,
         'account_id': getattr(user_profile, 'account_id', None),
+        'total_computers': total_computers,
+        'online_computers': online_computers,
+        'total_commands': total_commands,
+        'total_warnings': total_warnings,
+        'total_allowed_sites': total_allowed_sites,
+        'total_blocked_sites': total_blocked_sites,
     }
     return render(request, 'index.html', context)
 
 
+@login_required(login_url='login')
+def delete_blocked_site(request, site_id):
+    site = get_object_or_404(BlockedSite, id=site_id)
+    domain = site.domain
+    site.delete()
+    messages.success(request, f"'{domain}' taqiqlar ro'yxatidan olib tashlandi.")
+    return redirect('home')
+
+
+@login_required(login_url='login')
 def delete_allowed_site(request, site_id):
     site = get_object_or_404(AllowedSite, id=site_id)
+    domain = site.domain
     site.delete()
+    messages.success(request, f"'{domain}' oq ro'yxatdan olib tashlandi.")
     return redirect('home')
+
+
+@login_required(login_url='login')
+def delete_shared_account(request, share_id):
+    share = get_object_or_404(SharedAccount, id=share_id, recipient=request.user)
+    for comp in Computer.objects.filter(owner=share.owner):
+        comp.shared_with.remove(request.user)
+    display_name = share.display_name
+    share.delete()
+    messages.success(request, f"'{display_name}' bilan aloqa uzildi.")
+    return redirect('home')
+
+
+@login_required(login_url='login')
+def delete_computer(request, computer_id):
+    computer = get_object_or_404(Computer, id=computer_id)
+    if computer.owner == request.user or computer.owner is None or request.user.is_superuser:
+        comp_name = computer.name
+        computer.delete()
+        messages.success(request, f"'{comp_name}' kompyuteri ro'yxatdan o'chirildi.")
+    else:
+        messages.error(request, "Siz faqat o'zingizga tegishli kompyuterni o'chira olasiz.")
+    return redirect('home')
+
+
+@login_required(login_url='login')
+def clear_commands(request):
+    count = Command.objects.filter(user=request.user).count()
+    Command.objects.filter(user=request.user).delete()
+    messages.success(request, f"{count} ta buyruq tarixi tozalandi.")
+    return redirect('home')
+
+
+@login_required(login_url='login')
+def clear_warnings(request):
+    count = SiteWarning.objects.count()
+    SiteWarning.objects.all().delete()
+    messages.success(request, f"{count} ta xavfsizlik ogohlantirishlari tozalandi.")
+    return redirect('home')
+
+
+@login_required(login_url='login')
+def download_agent_bat(request):
+    profile = getattr(request.user, 'profile', None)
+    account_id = profile.account_id if profile else "12345678901234567890"
+    host = request.get_host()
+    scheme = "https" if request.is_secure() else "http"
+    server_url = f"{scheme}://{host}"
+
+    bat_content = f"""@echo off
+chcp 65001 >nul
+title Masofa Agent v3.0 - Masofaviy Boshqaruv va Veb Filtr
+
+:: ── UAC: Administrator huquqini so'rash ──────────────────────────
+>nul 2>&1 "%SYSTEMROOT%\\system32\\cacls.exe" "%SYSTEMROOT%\\system32\\config\\system"
+if '%errorlevel%' NEQ '0' (
+    echo Administrator huquqi talab etiladi. Iltimos ruxsat bering...
+    powershell -Command "Start-Process -FilePath '%~dpnx0' -Verb RunAs"
+    exit /b
+)
+:: ─────────────────────────────────────────────────────────────────
+
+echo ========================================================
+echo       MASOFAVIY BOSHQARUV TIZIMI - AGENT v3.0
+echo ========================================================
+echo Foydalanuvchi: {request.user.username}
+echo Akkaunt ID   : {account_id}
+echo Server       : {server_url}
+echo Administrator: HA (Veb filtr faol)
+echo ========================================================
+echo.
+
+python --version >nul 2>&1
+if errorlevel 1 (
+    echo [XATOLIK] Kompyuteringizda Python o'rnatilmagan!
+    echo Iltimos, https://www.python.org saytidan Python 3.10+ o'rnating.
+    pause
+    exit /b 1
+)
+
+echo Kerakli kutubxonalar tekshirilmoqda...
+pip install websockets pyautogui pillow requests >nul 2>&1
+
+echo Agent ishga tushirilmoqda (%COMPUTERNAME%)...
+echo Veb filtr (hosts fayl bloklash) faol!
+echo.
+python agent.py "%COMPUTERNAME%" --owner-id {account_id} --server-url {server_url}
+
+pause
+"""
+    response = HttpResponse(bat_content, content_type='application/x-bat')
+    response['Content-Disposition'] = 'attachment; filename="Masofa_Agent_Runner.bat"'
+    return response
+
+
+@login_required(login_url='login')
+def ajax_send_command(request):
+    """AJAX orqali terminal buyrug'ini qabul qilish"""
+    if request.method == "POST":
+        command_text = (request.POST.get("command_text") or "").strip()
+        if not command_text:
+            return JsonResponse({"status": "error", "message": "Buyruq matni bo'sh bo'lishi mumkin emas."}, status=400)
+        
+        cmd = Command.objects.create(
+            user=request.user,
+            command_text=command_text
+        )
+        return JsonResponse({
+            "status": "success",
+            "command_id": cmd.id,
+            "command_text": cmd.command_text,
+            "created_at": cmd.created_at.strftime("%Y-%m-%d %H:%M:%S")
+        })
+    return JsonResponse({"status": "error", "message": "Faqat POST so'rov qabul qilinadi."}, status=405)
+
+
+@login_required(login_url='login')
+def ajax_command_status(request, command_id):
+    """AJAX orqali buyruq bajarilish natijasini tekshirish"""
+    cmd = get_object_or_404(Command, id=command_id, user=request.user)
+    return JsonResponse({
+        "command_id": cmd.id,
+        "is_executed": cmd.is_executed,
+        "output_result": cmd.output_result or "",
+        "created_at": cmd.created_at.strftime("%Y-%m-%d %H:%M:%S")
+    })
 
 
 # ==========================================
@@ -221,17 +365,27 @@ def delete_allowed_site(request, site_id):
 # ==========================================
 
 class GetCommandAPIView(APIView):
+    permission_classes = [AllowAny]
 
     def get(self, request):
-        # Hali bajarilmagan eng birinchi buyruqni topamiz
-        command = Command.objects.filter(is_executed=False).first()
+        owner_id = request.GET.get("owner_id")
+        agent_id = request.GET.get("agent_id")
+        queryset = Command.objects.filter(is_executed=False)
+        
+        if owner_id:
+            profile = UserProfile.objects.filter(account_id=str(owner_id)).first()
+            if profile:
+                queryset = queryset.filter(user=profile.user)
+            elif str(owner_id).isdigit():
+                queryset = queryset.filter(user_id=owner_id)
+        
+        command = queryset.order_by('created_at').first()
         if command:
             serializer = CommandSerializer(command)
             return Response(serializer.data)
         return Response({"id": None, "command_text": None})
 
     def post(self, request):
-        # Masofadagi kompyuter bajarilgan buyruq natijasini shu yerga yuboradi
         command_id = request.data.get("command_id")
         output = request.data.get("output")
         
@@ -246,21 +400,21 @@ class GetCommandAPIView(APIView):
 
 
 class CheckSiteAPIView(APIView):
-    
-
-    permission_classes = [AllowAny] # Agar xavfsizlik uchun Token/IsAuthenticated kerak bo'lsa, o'zgartirishingiz mumkin
+    permission_classes = [AllowAny]
 
     def get(self, request):
         domain = request.GET.get("domain")
         if not domain:
             return Response({"allowed": False, "error": "Domain not provided"}, status=400)
         
-        # Oq ro'yxatda borligini tekshiramiz
+        # Birinchi navbatda taqiqlanganmi yoki yo'qligini tekshiramiz
+        if BlockedSite.objects.filter(domain__iexact=domain).exists():
+            return Response({"allowed": False, "blocked": True})
+            
         is_allowed = AllowedSite.objects.filter(domain__iexact=domain).exists()
-        return Response({"allowed": is_allowed})
+        return Response({"allowed": is_allowed, "blocked": False})
 
     def post(self, request):
-        # Ruxsatsiz saytga kirishga urinilganda agent ushbu endpointga ma'lumot yuboradi
         computer_name = request.data.get("computer_name", "Noma'lum kompyuter")
         url = request.data.get("url")
         domain = request.data.get("domain")
@@ -274,3 +428,32 @@ class CheckSiteAPIView(APIView):
             return Response({"status": "warning recorded"}, status=201)
         
         return Response({"status": "invalid data"}, status=400)
+
+
+class WhitelistAPIView(APIView):
+    """Agent uchun: ruxsat etilgan va taqiqlangan domenlar ro'yxatini qaytaradi."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        allowed = list(AllowedSite.objects.values_list('domain', flat=True))
+        blocked = list(BlockedSite.objects.values_list('domain', flat=True))
+        return Response({
+            "allowed_domains": allowed,
+            "blocked_domains": blocked,
+            "allowed_count": len(allowed),
+            "blocked_count": len(blocked)
+        })
+
+
+class AjaxBlockSiteView(APIView):
+    """AJAX orqali saytni taqiqlash uchun API."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        domain = request.data.get("domain")
+        if not domain:
+            return Response({"status": "error", "message": "Domen kiritilmadi."}, status=400)
+        
+        domain = domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
+        BlockedSite.objects.get_or_create(domain=domain)
+        return Response({"status": "success", "message": f"{domain} taqiqlandi."})
