@@ -140,3 +140,14 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels.layers.InMemoryChannelLayer",
     },
 }
+
+
+
+import os
+from pathlib import Path
+
+# Agar BASE_DIR tepada aniqlangan bo'lsa, qayta yozish shart emas
+BASE_DIR = Path(__file__).resolve().parent.parent 
+
+# Mana shu qatorni qo'shing:
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
