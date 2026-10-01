@@ -1,16 +1,20 @@
+import base64
 import os
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.db.models import Q
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
 
-from agent import build_ws_url
+from agent import build_ws_url, execute_system_command
 from my_app.consumers import normalize_agent_id
 from my_app.routing import websocket_urlpatterns
-from .models import Computer, SharedAccount, UserProfile
+from .models import Command, Computer, SharedAccount, UserProfile
 
 
 class AgentIdValidationTests(TestCase):
@@ -58,6 +62,54 @@ class AgentStreamConfigTests(TestCase):
             build_ws_url('PC-07', owner_id=19863799005458003971),
             'ws://127.0.0.1:8000/ws/screen/19863799005458003971__PC-07/?role=agent',
         )
+
+
+class AgentSetupTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='agent-setup', password='StrongPass123')
+        self.client.force_login(self.user)
+
+    def test_setup_installer_registers_hidden_agent_for_windows_startup(self):
+        response = self.client.get(reverse('download_agent_bat'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Masofa_Agent_Setup.bat', response['Content-Disposition'])
+        encoded_script = response.content.decode().split('-EncodedCommand ', 1)[1].splitlines()[0]
+        setup_script = base64.b64decode(encoded_script).decode('utf-16le')
+        self.assertIn("GetFolderPath('Startup')", setup_script)
+        self.assertIn('Start-Process -FilePath $pythonw', setup_script)
+        self.assertIn('/agent/script/', setup_script)
+        self.assertNotIn('‘', setup_script)
+        self.assertNotIn('’', setup_script)
+
+    def test_agent_script_download_endpoint_serves_agent_source(self):
+        response = self.client.get(reverse('download_agent_script'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'async def send_screen', b''.join(response.streaming_content))
+
+
+class AgentFileTransferTests(TestCase):
+    def test_file_download_returns_stream_descriptor(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file_path = Path(temp_dir) / 'sample.bin'
+            file_path.write_bytes(b'file-content')
+
+            result = execute_system_command(f'__DOWNLOAD_FILE__:{file_path}')
+
+        self.assertTrue(result.startswith('__FILE_TRANSFER_START__'))
+        self.assertIn('sample.bin', result)
+        self.assertTrue(result.endswith('__FILE_TRANSFER_END__'))
+
+    def test_file_over_transfer_limit_returns_error(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file_path = Path(temp_dir) / 'large.bin'
+            file_path.write_bytes(b'abcd')
+            with patch('agent.MAX_TRANSFER_BYTES', 3):
+                result = execute_system_command(f'__DOWNLOAD_FILE__:{file_path}')
+
+        self.assertIn('"status": "error"', result)
+        self.assertIn('4 GiB', result)
 
 
 class AgentWebsocketConnectionTests(TransactionTestCase):
@@ -177,7 +229,7 @@ class UserAccessIsolationTests(TestCase):
         self.assertContains(response, 'data-computer="PC-Shared"')
         self.assertContains(response, 'data-computer="PC-Shared" data-online="true"')
         self.assertContains(response, 'data-computer-id="' + owner.profile.account_id + '__PC-Shared"')
-        self.assertContains(response, 'data-stream-id="user-' + owner.profile.account_id + '"')
+        self.assertContains(response, f'data-stream-id="{owner.profile.account_id}__PC-Shared"')
         self.assertContains(response, 'Ishxonadagi kompyuterlar')
         self.assertContains(response, 'id="copyAccountId"')
 
@@ -190,6 +242,8 @@ class UserAccessIsolationTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-computer-id="PC-Own"')
+        self.assertContains(response, f'data-stream-id="{owner.profile.account_id}__PC-Own"')
+        self.assertContains(response, f'id="watchOwnAgentButton" data-stream-id="{owner.profile.account_id}__PC-Own"')
         self.assertContains(response, 'id="expandScreenButton"')
 
     def test_sharing_rejects_ids_that_are_not_20_digits(self):
@@ -230,6 +284,58 @@ class UserAccessIsolationTests(TestCase):
 
         self.assertEqual(SharedAccount.objects.filter(recipient=recipient).count(), 5)
         self.assertContains(response, '5 ta')
+
+
+class FileTransferTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='transfer-user', password='StrongPass123')
+        self.client.force_login(self.user)
+
+    @override_settings(DATA_UPLOAD_MAX_MEMORY_SIZE=2)
+    def test_streamed_file_upload_and_download(self):
+        command = Command.objects.create(
+            user=self.user,
+            command_text='__DOWNLOAD_FILE__:C:\\sample.bin',
+            computer_name='PC-Transfer',
+        )
+
+        with tempfile.TemporaryDirectory() as transfer_dir:
+            with patch('lamp.views.TRANSFER_DIR', Path(transfer_dir)), patch('lamp.views.MAX_FILE_TRANSFER_BYTES', 3):
+                upload = self.client.post(
+                    f"{reverse('upload_command_transfer', args=[command.pk])}?filename=sample.bin",
+                    data=b'abc',
+                    content_type='application/octet-stream',
+                )
+
+                self.assertEqual(upload.status_code, 201)
+                status = self.client.get(reverse('ajax_command_status', args=[command.pk])).json()
+                self.assertTrue(status['is_executed'])
+                self.assertEqual(status['transfer_filename'], 'sample.bin')
+
+                download = self.client.get(status['transfer_url'])
+                self.assertEqual(download.status_code, 200)
+                self.assertEqual(b''.join(download.streaming_content), b'abc')
+                download.close()
+                self.assertEqual(list(Path(transfer_dir).iterdir()), [])
+
+    def test_streamed_file_over_limit_is_rejected(self):
+        command = Command.objects.create(
+            user=self.user,
+            command_text='__DOWNLOAD_FILE__:C:\\large.bin',
+            computer_name='PC-Transfer',
+        )
+
+        with tempfile.TemporaryDirectory() as transfer_dir:
+            with patch('lamp.views.TRANSFER_DIR', Path(transfer_dir)), patch('lamp.views.MAX_FILE_TRANSFER_BYTES', 3):
+                response = self.client.post(
+                    reverse('upload_command_transfer', args=[command.pk]),
+                    data=b'abcd',
+                    content_type='application/octet-stream',
+                )
+
+        self.assertEqual(response.status_code, 413)
+        command.refresh_from_db()
+        self.assertFalse(command.is_executed)
 
 
 class AuthFlowTests(TestCase):

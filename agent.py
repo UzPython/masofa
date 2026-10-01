@@ -1,5 +1,6 @@
 import asyncio
 import argparse
+import http.client
 import websockets
 import pyautogui
 import io
@@ -23,6 +24,9 @@ HOSTS_MARKER_END   = "# === MASOFA WEB FILTER END ==="
 
 # Whitelist yangilanish oralig'i (soniya)
 WHITELIST_POLL_INTERVAL = 30
+MAX_TRANSFER_BYTES = 4 * 1024 * 1024 * 1024
+FILE_TRANSFER_START = '__FILE_TRANSFER_START__'
+FILE_TRANSFER_END = '__FILE_TRANSFER_END__'
 
 
 # ──────────────────── YORDAMCHI FUNKSIYALAR ────────────────────────
@@ -167,6 +171,39 @@ async def send_screen(agent_id: str, server_url=None, owner_id=None):
             await asyncio.sleep(3)
 
 
+def upload_transfer_file(base_url: str, command_id: int, file_path: str, filename: str) -> None:
+    parts = urlsplit(base_url)
+    connection_type = http.client.HTTPSConnection if parts.scheme == 'https' else http.client.HTTPConnection
+    connection = connection_type(parts.hostname, parts.port, timeout=120)
+    file_size = os.path.getsize(file_path)
+    if file_size > MAX_TRANSFER_BYTES:
+        raise ValueError('Fayl hajmi 4 GiB limitidan oshdi.')
+
+    transfer_url = f"/api/command/{command_id}/transfer/?{urlencode({'filename': filename})}"
+    try:
+        connection.putrequest('POST', transfer_url)
+        connection.putheader('Content-Type', 'application/octet-stream')
+        connection.putheader('Content-Length', str(file_size))
+        connection.putheader('User-Agent', 'MasofaAgent/3.0')
+        connection.endheaders()
+        sent_size = 0
+        with open(file_path, 'rb') as transfer_file:
+            while chunk := transfer_file.read(1024 * 1024):
+                sent_size += len(chunk)
+                if sent_size > MAX_TRANSFER_BYTES:
+                    raise ValueError('Fayl hajmi 4 GiB limitidan oshdi.')
+                connection.send(chunk)
+        if sent_size != file_size:
+            raise OSError('Fayl uzatish vaqtida hajmi o\'zgardi.')
+
+        response = connection.getresponse()
+        response_body = response.read().decode('utf-8', errors='replace')
+        if response.status != 201:
+            raise RuntimeError(f'Fayl serverga uzatilmadi ({response.status}): {response_body}')
+    finally:
+        connection.close()
+
+
 def execute_system_command(command_text: str) -> str:
     """Tizim buyrug'ini xavfsiz bajarish va natijani qaytarish."""
     if command_text.startswith("__DOWNLOAD_ZIP__:"):
@@ -176,7 +213,6 @@ def execute_system_command(command_text: str) -> str:
         try:
             import zipfile
             import tempfile
-            import base64
             
             base_name = os.path.basename(folder_path.rstrip('\\/')) or 'folder'
             zip_filename = f"{base_name}_masofa.zip"
@@ -191,17 +227,15 @@ def execute_system_command(command_text: str) -> str:
                             zipf.write(file_path, arcname)
                         except Exception:
                             pass
-            
-            with open(zip_path, 'rb') as f:
-                content_bytes = f.read()
-            b64_data = base64.b64encode(content_bytes).decode('utf-8')
-            
-            try:
-                os.remove(zip_path)
-            except:
-                pass
 
-            return '__FILE_JSON_START__' + json.dumps({'status': 'ok', 'filename': zip_filename, 'data': b64_data}, ensure_ascii=False) + '__FILE_JSON_END__'
+            if os.path.getsize(zip_path) > MAX_TRANSFER_BYTES:
+                try:
+                    os.remove(zip_path)
+                except OSError:
+                    pass
+                raise ValueError('ZIP fayl hajmi 4 GiB limitidan oshdi.')
+            
+            return FILE_TRANSFER_START + json.dumps({'path': zip_path, 'filename': zip_filename}, ensure_ascii=False) + FILE_TRANSFER_END
         except Exception as e:
             return '__FILE_JSON_START__' + json.dumps({'status': 'error', 'message': str(e)}, ensure_ascii=False) + '__FILE_JSON_END__'
 
@@ -210,12 +244,10 @@ def execute_system_command(command_text: str) -> str:
         if (path.startswith('"') and path.endswith('"')) or (path.startswith("'") and path.endswith("'")):
             path = path[1:-1].strip()
         try:
-            import base64
-            with open(path, 'rb') as f:
-                content_bytes = f.read()
-            b64_data = base64.b64encode(content_bytes).decode('utf-8')
+            if os.path.getsize(path) > MAX_TRANSFER_BYTES:
+                raise ValueError('Fayl hajmi 4 GiB limitidan oshdi.')
             filename = os.path.basename(path)
-            return '__FILE_JSON_START__' + json.dumps({'status': 'ok', 'filename': filename, 'data': b64_data}, ensure_ascii=False) + '__FILE_JSON_END__'
+            return FILE_TRANSFER_START + json.dumps({'path': path, 'filename': filename}, ensure_ascii=False) + FILE_TRANSFER_END
         except Exception as e:
             return '__FILE_JSON_START__' + json.dumps({'status': 'error', 'message': str(e)}, ensure_ascii=False) + '__FILE_JSON_END__'
 
@@ -297,19 +329,46 @@ async def poll_commands(agent_id: str, server_url=None, owner_id=None):
                 print(f"[+] [BUYRUQ] Yangi buyruq (ID: {cmd_id}): '{cmd_text}'")
 
                 output = await asyncio.to_thread(execute_system_command, cmd_text)
+                transfer_succeeded = False
+                transfer_path = None
+                if output.startswith(FILE_TRANSFER_START):
+                    try:
+                        transfer_json = output[len(FILE_TRANSFER_START):output.index(FILE_TRANSFER_END)]
+                        transfer = json.loads(transfer_json)
+                        transfer_path = transfer['path']
+                        await asyncio.to_thread(
+                            upload_transfer_file,
+                            base_url,
+                            cmd_id,
+                            transfer_path,
+                            transfer['filename'],
+                        )
+                        transfer_succeeded = True
+                        print(f"[+] [BUYRUQ] ID: {cmd_id} fayli oqimli uzatildi.")
+                    except Exception as e:
+                        output = '__FILE_JSON_START__' + json.dumps(
+                            {'status': 'error', 'message': str(e)}, ensure_ascii=False
+                        ) + '__FILE_JSON_END__'
+                    finally:
+                        if transfer_path:
+                            try:
+                                os.remove(transfer_path)
+                            except OSError:
+                                pass
 
-                def post_result():
-                    post_data = json.dumps({"command_id": cmd_id, "output": output}).encode('utf-8')
-                    post_req = urllib.request.Request(
-                        f"{base_url}/api/command/",
-                        data=post_data,
-                        headers={'Content-Type': 'application/json', 'User-Agent': 'MasofaAgent/3.0'}
-                    )
-                    with urllib.request.urlopen(post_req, timeout=5) as res:
-                        return res.status == 200
+                if not transfer_succeeded:
+                    def post_result():
+                        post_data = json.dumps({"command_id": cmd_id, "output": output}).encode('utf-8')
+                        post_req = urllib.request.Request(
+                            f"{base_url}/api/command/",
+                            data=post_data,
+                            headers={'Content-Type': 'application/json', 'User-Agent': 'MasofaAgent/3.0'}
+                        )
+                        with urllib.request.urlopen(post_req, timeout=5) as res:
+                            return res.status == 200
 
-                await asyncio.to_thread(post_result)
-                print(f"[+] [BUYRUQ] ID: {cmd_id} natijasi yuborildi.")
+                    await asyncio.to_thread(post_result)
+                    print(f"[+] [BUYRUQ] ID: {cmd_id} natijasi yuborildi.")
 
         except urllib.error.URLError:
             pass

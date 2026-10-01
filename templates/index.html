@@ -52,9 +52,6 @@
         html.theme-dark .divide-slate-200 > * {
             border-color: #1f293d !important;
         }
-        button * {
-            pointer-events: none;
-        }
         button {
             cursor: pointer;
         }
@@ -306,10 +303,14 @@
                     <!-- O'ng: Amallar (Skrinshot, To'liq ekran, Mening ekranim) -->
                     <div class="flex items-center flex-wrap gap-2">
                         <!-- Mening ekranim -->
-                        <button type="button" id="showOwnScreenButton" data-stream-id="user-{{ account_id }}" class="inline-flex items-center gap-2 rounded-xl border border-indigo-400/40 bg-indigo-500/10 hover:bg-indigo-500/25 px-3 py-2 text-xs font-semibold text-indigo-300 transition">
+                        <button type="button" id="showOwnScreenButton" data-stream-id="user-{{ account_id }}" title="Chrome ochiq turganida ekran ulashish" class="inline-flex items-center gap-2 rounded-xl border border-indigo-400/40 bg-indigo-500/10 hover:bg-indigo-500/25 px-3 py-2 text-xs font-semibold text-indigo-300 transition">
                             <i class="fa-solid fa-camera-rotate"></i>
-                            <span id="ownScreenBtnText">Mening ekranim</span>
+                            <span id="ownScreenBtnText">Brauzerda ulashish</span>
                         </button>
+                        <a href="{% url 'download_agent_bat' %}" class="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-300 transition" title="Chrome yopilganda ham ekran uzatishni davom ettirish">
+                            <i class="fa-solid fa-download"></i>
+                            <span>Doimiy efirni sozlash</span>
+                        </a>
 
                         <!-- Skrinshot olish -->
                         <button type="button" id="takeScreenshotBtn" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 px-3 py-2 text-xs font-semibold transition" title="Hozirgi kadrni rasm qilib saqlash">
@@ -349,7 +350,7 @@
                     </span>
                     <div class="flex flex-wrap items-center gap-2">
                         {% for computer in computers %}
-                        <button type="button" data-computer="{{ computer.name }}" data-online="{{ computer.is_online|yesno:'true,false' }}" data-computer-id="{% if computer.owner_id == user.id or computer.owner is None %}{{ computer.name }}{% else %}{{ computer.owner.profile.account_id }}__{{ computer.name }}{% endif %}" data-stream-id="{% if computer.owner_id == user.id or computer.owner is None %}{{ computer.name }}{% else %}{{ computer.owner.profile.account_id }}__{{ computer.name }}{% endif %}" data-stream-name="{{ computer.name }}" class="quick-stream-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition {% if computer.is_online %}bg-emerald-950/60 text-emerald-300 border border-emerald-600/40 hover:bg-emerald-900/60{% else %}bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700{% endif %}">
+                        <button type="button" data-computer="{{ computer.name }}" data-online="{{ computer.is_online|yesno:'true,false' }}" data-computer-id="{% if computer.owner_id == user.id or computer.owner is None %}{{ computer.name }}{% else %}{{ computer.owner.profile.account_id }}__{{ computer.name }}{% endif %}" data-stream-id="{% if computer.owner is None %}{{ computer.name }}{% else %}{{ computer.owner.profile.account_id }}__{{ computer.name }}{% endif %}" data-stream-name="{{ computer.name }}" class="quick-stream-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition {% if computer.is_online %}bg-emerald-950/60 text-emerald-300 border border-emerald-600/40 hover:bg-emerald-900/60{% else %}bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700{% endif %}">
                             <span class="h-2 w-2 rounded-full {% if computer.is_online %}bg-emerald-400 animate-pulse{% else %}bg-slate-500{% endif %}"></span>
                             {{ computer.name }}
                         </button>
@@ -357,7 +358,7 @@
 
                         {% for shared_account in shared_accounts %}
                         {% if shared_account.owner.online_owned_computers %}
-                        <button type="button" data-computer="{{ shared_account.owner.online_owned_computers.0.name }}" data-online="true" data-computer-id="{{ shared_account.owner.profile.account_id }}__{{ shared_account.owner.online_owned_computers.0.name }}" data-stream-id="user-{{ shared_account.owner.profile.account_id }}" data-stream-name="{{ shared_account.display_name }}" class="quick-stream-chip shared-screen-select inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-950/60 text-indigo-300 border border-indigo-600/40 hover:bg-indigo-900/60 transition">
+                        <button type="button" data-computer="{{ shared_account.owner.online_owned_computers.0.name }}" data-online="true" data-computer-id="{{ shared_account.owner.profile.account_id }}__{{ shared_account.owner.online_owned_computers.0.name }}" data-stream-id="{{ shared_account.owner.profile.account_id }}__{{ shared_account.owner.online_owned_computers.0.name }}" data-stream-name="{{ shared_account.display_name }}" class="quick-stream-chip shared-screen-select inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-950/60 text-indigo-300 border border-indigo-600/40 hover:bg-indigo-900/60 transition">
                             <i class="fa-solid fa-user-astronaut text-[10px]"></i>
                             {{ shared_account.display_name }}
                         </button>
@@ -651,7 +652,7 @@
                             <button type="button" class="preset-block-btn text-xs bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-700 px-2.5 py-1 rounded-lg transition" data-site="facebook.com">Facebook</button>
                             <button type="button" class="preset-block-btn text-xs bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-700 px-2.5 py-1 rounded-lg transition" data-site="tiktok.com">TikTok</button>
                             <button type="button" class="preset-block-btn text-xs bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-700 px-2.5 py-1 rounded-lg transition" data-site="twitter.com">Twitter</button>
-                            <button type="button" class="preset-block-btn text-xs bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-700 px-2.5 py-1 rounded-lg transition" data-site="pornhub.com">PornHub</button>
+                            <button type="button" class="preset-block-btn text-xs bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-700 px-2.5 py-1 rounded-lg transition" data-site="sherbek.com">sherbek</button>
                         </div>
                     </div>
 
@@ -877,6 +878,22 @@
                         </h3>
 
                         <div class="space-y-3">
+                            {% if own_computers %}
+                            <div class="flex flex-wrap items-center justify-between p-4 rounded-xl border border-cyan-200 bg-cyan-50/60 gap-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="h-10 w-10 rounded-full bg-cyan-100 text-cyan-700 flex items-center justify-center text-sm">
+                                        <i class="fa-solid fa-desktop"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-slate-800 text-sm">Mening kompyuterim</h4>
+                                        <p class="text-xs text-slate-500 font-mono">{{ own_computers.0.name }}</p>
+                                    </div>
+                                </div>
+                                <button type="button" id="watchOwnAgentButton" data-stream-id="{{ account_id }}__{{ own_computers.0.name }}" data-stream-name="{{ own_computers.0.name }}" class="bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm" title="Chrome yopilganda ham uzatiladigan agent ekranini ko'rish">
+                                    <i class="fa-solid fa-eye"></i> Ekranni ko'rish
+                                </button>
+                            </div>
+                            {% endif %}
                             {% for shared_account in shared_accounts %}
                             <div class="flex flex-wrap items-center justify-between p-4 rounded-xl border border-slate-200 bg-slate-50 gap-3">
                                 <div class="flex items-center gap-3">
@@ -888,9 +905,12 @@
                                         <p class="text-xs text-slate-500 font-mono">Foydalanuvchi: {{ shared_account.owner.username }}</p>
                                     </div>
                                 </div>
-                                <div class="flex items-center gap-2">
-                                    {% if shared_account.owner.online_owned_computers %}
-                                    <button type="button" data-computer="{{ shared_account.owner.online_owned_computers.0.name }}" data-online="true" data-computer-id="{{ shared_account.owner.profile.account_id }}__{{ shared_account.owner.online_owned_computers.0.name }}" data-stream-id="user-{{ shared_account.owner.profile.account_id }}" data-stream-name="{{ shared_account.display_name }}" class="watch-shared-btn shared-screen-select bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm">
+                                 <div class="flex items-center gap-2">
+                                     <button type="button" data-computer-name="{% if shared_account.owner.owned_computers.first %}{{ shared_account.owner.owned_computers.first.name }}{% else %}{{ shared_account.display_name }}{% endif %}" class="browse-shared-files-btn bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm" title="Papkalar va fayllarni ko'rish">
+                                         <i class="fa-solid fa-folder-open"></i> Papkalar
+                                     </button>
+                                     {% if shared_account.owner.online_owned_computers %}
+                                    <button type="button" data-computer="{{ shared_account.owner.online_owned_computers.0.name }}" data-online="true" data-computer-id="{{ shared_account.owner.profile.account_id }}__{{ shared_account.owner.online_owned_computers.0.name }}" data-stream-id="{{ shared_account.owner.profile.account_id }}__{{ shared_account.owner.online_owned_computers.0.name }}" data-stream-name="{{ shared_account.display_name }}" class="watch-shared-btn shared-screen-select bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm">
                                         <i class="fa-solid fa-eye"></i> Ekranni ko'rish
                                     </button>
                                     {% else %}
@@ -966,6 +986,7 @@
         const screenStream = document.getElementById('screenStream');
         const currentStreamTitle = document.getElementById('currentStreamTitle');
         const ownScreenButton = document.getElementById('showOwnScreenButton');
+        const ownAgentScreenButton = document.getElementById('watchOwnAgentButton');
         const ownScreenBtnText = document.getElementById('ownScreenBtnText');
         const expandScreenButton = document.getElementById('expandScreenButton');
         const expandScreenIcon = document.getElementById('expandScreenIcon');
@@ -1056,6 +1077,16 @@
             if (socket) socket.close();
             currentStreamName = streamName;
             currentStreamTitle.innerText = streamName;
+            screenStream.removeAttribute('src');
+            screenStream.style.visibility = 'hidden';
+            statusText.innerHTML = `
+                <div class="inline-flex p-4 rounded-2xl bg-slate-800/60 text-slate-400 text-3xl border border-slate-700">
+                    <i class="fa-solid fa-spinner fa-spin text-cyan-400"></i>
+                </div>
+                <h3 class="text-slate-300 font-semibold text-base">${streamName} dan birinchi kadr kutilmoqda...</h3>
+            `;
+            statusText.style.display = 'block';
+            let receivedFrame = false;
 
             const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
             const wsUrl = wsProtocol + window.location.host + '/ws/screen/' + encodeURIComponent(streamKey) + '/?role=viewer';
@@ -1064,8 +1095,7 @@
             socket.binaryType = 'blob';
 
             socket.onopen = function () {
-                statusText.style.display = 'none';
-                showToast(`Efirga ulanildi: ${streamName}`);
+                showToast(`${streamName}: serverga ulandi, kadr kutilmoqda`, 'fa-spinner fa-spin text-cyan-400');
             };
             socket.onmessage = function (event) {
                 const blob = event.data instanceof Blob ? event.data : new Blob([event.data], { type: 'image/jpeg' });
@@ -1074,9 +1104,15 @@
                     URL.revokeObjectURL(url);
                 };
                 screenStream.src = url;
+                screenStream.style.visibility = 'visible';
                 statusText.style.display = 'none';
+                if (!receivedFrame) {
+                    receivedFrame = true;
+                    showToast(`Jonli efir boshlandi: ${streamName}`);
+                }
             };
             socket.onclose = function () {
+                screenStream.style.visibility = 'hidden';
                 statusText.innerHTML = `
                     <div class="inline-flex p-4 rounded-2xl bg-slate-800/60 text-slate-400 text-3xl border border-slate-700">
                         <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
@@ -1104,6 +1140,13 @@
                 openScreenViewer(btn.dataset.streamId, btn.dataset.streamName);
             });
         });
+
+        if (ownAgentScreenButton) {
+            ownAgentScreenButton.addEventListener('click', () => {
+                switchTab('tab-screen');
+                openScreenViewer(ownAgentScreenButton.dataset.streamId, ownAgentScreenButton.dataset.streamName);
+            });
+        }
 
         // 4. MENING EKRANIMNI ULASHISH (BROWSER GETDISPLAYMEDIA)
         function stopOwnScreen() {
@@ -1385,19 +1428,50 @@
         const fileListScreen = document.getElementById('fileListScreen');
         const selectedFileComputerInput = document.getElementById('selectedFileComputer');
 
-        document.querySelectorAll('.file-computer-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
+        document.body.addEventListener('click', (e) => {
+            const tabBtn = e.target.closest('.tab-btn');
+            if (tabBtn) {
+                switchTab(tabBtn.dataset.tab);
+                return;
+            }
+            const sharedFilesBtn = e.target.closest('.browse-shared-files-btn');
+            if (sharedFilesBtn) {
+                const compName = sharedFilesBtn.dataset.computerName;
+                if (compName) {
+                    switchTab('tab-files');
+                    const compBtn = document.querySelector(`.file-computer-btn[data-computer-name="${compName}"]`);
+                    if (compBtn) {
+                        compBtn.click();
+                    } else {
+                        if (selectedFileComputerInput) {
+                            selectedFileComputerInput.value = compName;
+                        }
+                        loadDirectory('C:\\');
+                    }
+                }
+                return;
+            }
+            const fileCompBtn = e.target.closest('.file-computer-btn');
+            if (fileCompBtn) {
                 document.querySelectorAll('.file-computer-btn').forEach(b => {
                     b.classList.remove('bg-indigo-600', 'text-white', 'border-indigo-600', 'shadow-sm');
                     b.classList.add('bg-white', 'hover:bg-slate-100', 'text-slate-700', 'border-slate-200');
                 });
-                btn.classList.remove('bg-white', 'hover:bg-slate-100', 'text-slate-700', 'border-slate-200');
-                btn.classList.add('bg-indigo-600', 'text-white', 'border-indigo-600', 'shadow-sm');
+                fileCompBtn.classList.remove('bg-white', 'hover:bg-slate-100', 'text-slate-700', 'border-slate-200');
+                fileCompBtn.classList.add('bg-indigo-600', 'text-white', 'border-indigo-600', 'shadow-sm');
                 if (selectedFileComputerInput) {
-                    selectedFileComputerInput.value = btn.dataset.computerName;
+                    selectedFileComputerInput.value = fileCompBtn.dataset.computerName;
                 }
                 refreshFiles();
-            });
+                return;
+            }
+            const quickCmdBtn = e.target.closest('.quick-cmd-btn');
+            if (quickCmdBtn) {
+                const cmd = quickCmdBtn.dataset.cmd;
+                switchTab('tab-terminal');
+                sendTerminalCommand(cmd);
+                return;
+            }
         });
 
         function formatBytes(bytes) {
@@ -1465,6 +1539,15 @@
             }
         };
 
+        function downloadTransfer(resData) {
+            const link = document.createElement('a');
+            link.href = resData.transfer_url;
+            link.download = resData.transfer_filename || 'download';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        }
+
         window.downloadZip = function(path) {
             const compName = selectedFileComputerInput ? selectedFileComputerInput.value : '';
             fileListScreen.innerHTML = `<div class="text-center py-12 text-amber-600 text-xs"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block"></i> "${escapeHtml(path)}" papkasi zip qilib yuklanmoqda...</div>`;
@@ -1486,7 +1569,7 @@
                     let checkCount = 0;
                     const pollInterval = setInterval(async () => {
                         checkCount++;
-                        if (checkCount > 120) {
+                        if (checkCount > 4 * 60 * 60) {
                             clearInterval(pollInterval);
                             refreshFiles();
                             alert('Papkani zip qilib yuklab olish vaqti tugadi.');
@@ -1497,6 +1580,11 @@
                             const resData = await res.json();
                             if (resData.is_executed) {
                                 clearInterval(pollInterval);
+                                if (resData.transfer_url) {
+                                    downloadTransfer(resData);
+                                    refreshFiles();
+                                    return;
+                                }
                                 const output = resData.output_result || '';
                                 const startIdx = output.indexOf('__FILE_JSON_START__');
                                 const endIdx = output.indexOf('__FILE_JSON_END__');
@@ -1546,6 +1634,8 @@
                 refreshFiles();
             });
         };
+
+        window.downloadFile = function(path) {
             const compName = selectedFileComputerInput ? selectedFileComputerInput.value : '';
             fileListScreen.innerHTML = `<div class="text-center py-12 text-emerald-600 text-xs"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block"></i> "${escapeHtml(path)}" fayli yuklanmoqda...</div>`;
             
@@ -1566,7 +1656,7 @@
                     let checkCount = 0;
                     const pollInterval = setInterval(async () => {
                         checkCount++;
-                        if (checkCount > 40) {
+                        if (checkCount > 4 * 60 * 60) {
                             clearInterval(pollInterval);
                             refreshFiles();
                             alert('Faylni yuklab olish vaqti tugadi.');
@@ -1577,6 +1667,11 @@
                             const resData = await res.json();
                             if (resData.is_executed) {
                                 clearInterval(pollInterval);
+                                if (resData.transfer_url) {
+                                    downloadTransfer(resData);
+                                    refreshFiles();
+                                    return;
+                                }
                                 const output = resData.output_result || '';
                                 const startIdx = output.indexOf('__FILE_JSON_START__');
                                 const endIdx = output.indexOf('__FILE_JSON_END__');
@@ -1625,6 +1720,7 @@
                 alert('Server bilan aloqa yo\'q.');
                 refreshFiles();
             });
+        };
         
 
         function escapeHtml(str) {

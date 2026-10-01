@@ -1,16 +1,133 @@
 import csv
+import json
+import os
+import tempfile
+import time
+import uuid
+from pathlib import Path
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.db.models import Prefetch, Q
-from django.http import HttpResponse, JsonResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import Command, AllowedSite, BlockedSite, SiteWarning, Computer, SharedAccount, UserProfile
 from .serializers import CommandSerializer
+
+MAX_FILE_TRANSFER_BYTES = 4 * 1024 * 1024 * 1024
+TRANSFER_MARKER = '__TRANSFER_FILE__:'
+TRANSFER_DIR = Path(tempfile.gettempdir()) / 'masofa-transfers'
+
+
+class TransferFileResponse(FileResponse):
+    def __init__(self, *args, transfer_path, **kwargs):
+        self.transfer_path = Path(transfer_path)
+        super().__init__(*args, **kwargs)
+
+    def close(self):
+        try:
+            super().close()
+        finally:
+            self.transfer_path.unlink(missing_ok=True)
+
+
+def _transfer_path(transfer_id):
+    parsed_id = uuid.UUID(hex=transfer_id)
+    return TRANSFER_DIR / f'{parsed_id.hex}.bin'
+
+
+def _cleanup_old_transfers():
+    cutoff = time.time() - 24 * 60 * 60
+    for transfer_path in TRANSFER_DIR.glob('*.bin'):
+        try:
+            if transfer_path.stat().st_mtime < cutoff:
+                transfer_path.unlink()
+        except OSError:
+            pass
+
+
+@csrf_exempt
+def upload_command_transfer(request, command_id):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Faqat POST so\'rov qabul qilinadi.'}, status=405)
+
+    command = get_object_or_404(Command, id=command_id)
+    if command.is_executed or not command.command_text.startswith(('__DOWNLOAD_FILE__:', '__DOWNLOAD_ZIP__:')):
+        return JsonResponse({'status': 'error', 'message': 'Fayl uzatish buyrug\'i topilmadi.'}, status=409)
+
+    try:
+        expected_size = int(request.META.get('CONTENT_LENGTH', '-1'))
+    except (TypeError, ValueError):
+        expected_size = -1
+    if expected_size < 0:
+        return JsonResponse({'status': 'error', 'message': 'Fayl hajmi ko\'rsatilmagan.'}, status=411)
+    if expected_size > MAX_FILE_TRANSFER_BYTES:
+        return JsonResponse({'status': 'error', 'message': 'Fayl 4 GiB limitidan katta.'}, status=413)
+
+    filename = (request.GET.get('filename') or 'download').replace('\\', '/').rsplit('/', 1)[-1].strip()
+    filename = filename.replace('\x00', '')[:255] or 'download'
+    transfer_id = uuid.uuid4().hex
+    TRANSFER_DIR.mkdir(parents=True, exist_ok=True)
+    _cleanup_old_transfers()
+    transfer_path = _transfer_path(transfer_id)
+    received_size = 0
+
+    try:
+        with transfer_path.open('wb') as transfer_file:
+            while True:
+                chunk = request.read(1024 * 1024)
+                if not chunk:
+                    break
+                received_size += len(chunk)
+                if received_size > MAX_FILE_TRANSFER_BYTES or received_size > expected_size:
+                    transfer_path.unlink(missing_ok=True)
+                    return JsonResponse({'status': 'error', 'message': 'Fayl 4 GiB limitidan katta.'}, status=413)
+                transfer_file.write(chunk)
+
+        if received_size != expected_size:
+            transfer_path.unlink(missing_ok=True)
+            return JsonResponse({'status': 'error', 'message': 'Fayl to\'liq qabul qilinmadi.'}, status=400)
+    except OSError as error:
+        transfer_path.unlink(missing_ok=True)
+        return JsonResponse({'status': 'error', 'message': str(error)}, status=500)
+
+    command.output_result = TRANSFER_MARKER + json.dumps({
+        'transfer_id': transfer_id,
+        'filename': filename,
+        'size': received_size,
+    })
+    command.is_executed = True
+    command.save(update_fields=['output_result', 'is_executed'])
+    return JsonResponse({'status': 'success'}, status=201)
+
+
+@login_required(login_url='login')
+def download_command_transfer(request, command_id):
+    command = get_object_or_404(Command, id=command_id, user=request.user, is_executed=True)
+    if not (command.output_result or '').startswith(TRANSFER_MARKER):
+        return JsonResponse({'status': 'error', 'message': 'Yuklab olinadigan fayl topilmadi.'}, status=404)
+
+    try:
+        metadata = json.loads(command.output_result[len(TRANSFER_MARKER):])
+        transfer_path = _transfer_path(metadata['transfer_id'])
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({'status': 'error', 'message': 'Fayl uzatish ma\'lumoti noto\'g\'ri.'}, status=404)
+    if not transfer_path.is_file():
+        return JsonResponse({'status': 'error', 'message': 'Vaqtinchalik fayl topilmadi.'}, status=404)
+
+    filename = str(metadata.get('filename') or 'download').replace('\\', '/').rsplit('/', 1)[-1]
+    return TransferFileResponse(
+        transfer_path.open('rb'),
+        transfer_path=transfer_path,
+        as_attachment=True,
+        filename=filename,
+    )
 
 # ==========================================
 # 1. VEB-INTERFEYS (HTML) QISMI
@@ -167,6 +284,24 @@ def index_view(request):
         Q(owner=request.user) | Q(shared_with=request.user)
     ).distinct().order_by('name')
 
+    if not computers.exists():
+        import socket
+        hostname = socket.gethostname() or "Asosiy Kompyuter"
+        Computer.objects.get_or_create(
+            owner=request.user,
+            name=hostname,
+            defaults={
+                "ip_address": "127.0.0.1",
+                "username": "agent",
+                "password": "agent123",
+                "is_online": True,
+                "status_text": "Online",
+            }
+        )
+        computers = Computer.objects.filter(
+            Q(owner=request.user) | Q(shared_with=request.user)
+        ).distinct().order_by('name')
+
     shared_accounts = SharedAccount.objects.filter(recipient=request.user).select_related('owner').prefetch_related(
         Prefetch(
             'owner__owned_computers',
@@ -176,6 +311,7 @@ def index_view(request):
     ).order_by('-created_at')
     shared_account_count = shared_accounts.count()
     selected_computer = computers.first()
+    own_computers = Computer.objects.filter(owner=request.user).order_by('name')
     user_profile = UserProfile.objects.filter(user=request.user).first()
 
     total_computers = computers.count()
@@ -194,6 +330,7 @@ def index_view(request):
         'shared_accounts': shared_accounts,
         'shared_account_count': shared_account_count,
         'selected_computer': selected_computer,
+        'own_computers': own_computers,
         'user_profile': user_profile,
         'account_id': getattr(user_profile, 'account_id', None),
         'total_computers': total_computers,
@@ -270,56 +407,162 @@ def download_agent_bat(request):
     host = request.get_host()
     scheme = "https" if request.is_secure() else "http"
     server_url = f"{scheme}://{host}"
-
+    safe_server_url = server_url.replace("'", "''")
+    powershell_setup = f"""
+$ErrorActionPreference = 'Stop'
+$installDir = Join-Path $env:LOCALAPPDATA 'MasofaAgent'
+New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+$python = (Get-Command python.exe -ErrorAction Stop).Source
+& $python -m pip install websockets pyautogui pillow
+if ($LASTEXITCODE -ne 0) {{ throw 'Agent dependencies failed to install.' }}
+$pythonw = Join-Path (Split-Path $python) 'pythonw.exe'
+if (-not (Test-Path $pythonw)) {{ throw 'pythonw.exe was not found.' }}
+$agentPath = Join-Path $installDir 'agent.py'
+Invoke-WebRequest -UseBasicParsing -Uri '{safe_server_url}/agent/script/' -OutFile $agentPath
+$serverUrl = '{safe_server_url}'
+$arguments = '"' + $agentPath + '" "' + $env:COMPUTERNAME + '" --owner-id {account_id} --server-url "' + $serverUrl + '"'
+$startup = [Environment]::GetFolderPath('Startup')
+$shell = New-Object -ComObject WScript.Shell
+$shortcut = $shell.CreateShortcut((Join-Path $startup 'Masofa Agent.lnk'))
+$shortcut.TargetPath = $pythonw
+$shortcut.Arguments = $arguments
+$shortcut.WorkingDirectory = $installDir
+$shortcut.Save()
+Start-Process -FilePath $pythonw -ArgumentList $arguments -WorkingDirectory $installDir -WindowStyle Hidden
+Write-Output 'Agent is running in the background and starts when Windows signs in.'
+"""
+    import base64
+    encoded_setup = base64.b64encode(powershell_setup.encode('utf-16le')).decode('ascii')
     bat_content = f"""@echo off
 chcp 65001 >nul
-title Masofa Agent v3.0 - Masofaviy Boshqaruv va Veb Filtr
-
-:: ── UAC: Administrator huquqini so'rash ──────────────────────────
->nul 2>&1 "%SYSTEMROOT%\\system32\\cacls.exe" "%SYSTEMROOT%\\system32\\config\\system"
-if '%errorlevel%' NEQ '0' (
-    echo Administrator huquqi talab etiladi. Iltimos ruxsat bering...
-    powershell -Command "Start-Process -FilePath '%~dpnx0' -Verb RunAs"
-    exit /b
-)
-:: ─────────────────────────────────────────────────────────────────
-
-echo ========================================================
-echo       MASOFAVIY BOSHQARUV TIZIMI - AGENT v3.0
-echo ========================================================
-echo Foydalanuvchi: {request.user.username}
-echo Akkaunt ID   : {account_id}
-echo Server       : {server_url}
-echo Administrator: HA (Veb filtr faol)
-echo ========================================================
-echo.
-
-python --version >nul 2>&1
+title Masofa Agent sozlamasi
+powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand {encoded_setup}
 if errorlevel 1 (
-    echo [XATOLIK] Kompyuteringizda Python o'rnatilmagan!
-    echo Iltimos, https://www.python.org saytidan Python 3.10+ o'rnating.
+    echo Agentni sozlashda xatolik yuz berdi.
     pause
     exit /b 1
 )
-
-echo Kerakli kutubxonalar tekshirilmoqda...
-pip install websockets pyautogui pillow requests >nul 2>&1
-
-echo Agent ishga tushirilmoqda (%COMPUTERNAME%)...
-echo Veb filtr (hosts fayl bloklash) faol!
 echo.
-python agent.py "%COMPUTERNAME%" --owner-id {account_id} --server-url {server_url}
-
+echo Endi Chrome brauzerini yopishingiz mumkin. Agent fonda davom etadi.
 pause
 """
     response = HttpResponse(bat_content, content_type='application/x-bat')
-    response['Content-Disposition'] = 'attachment; filename="Masofa_Agent_Runner.bat"'
+    response['Content-Disposition'] = 'attachment; filename="Masofa_Agent_Setup.bat"'
     return response
+
+
+def download_agent_script(request):
+    agent_path = Path(__file__).resolve().parent.parent / 'agent.py'
+    return FileResponse(agent_path.open('rb'), content_type='text/x-python', as_attachment=True, filename='agent.py')
+
+
+def execute_system_command_local(command_text: str) -> str:
+    import os
+    import json
+    import base64
+    import zipfile
+    import tempfile
+    import subprocess
+    import time
+
+    if command_text.startswith("__DOWNLOAD_ZIP__:"):
+        folder_path = command_text[len("__DOWNLOAD_ZIP__:"):].strip()
+        if (folder_path.startswith('"') and folder_path.endswith('"')) or (folder_path.startswith("'") and folder_path.endswith("'")):
+            folder_path = folder_path[1:-1].strip()
+        try:
+            base_name = os.path.basename(folder_path.rstrip('\\/')) or 'folder'
+            zip_filename = f"{base_name}_masofa.zip"
+            zip_path = os.path.join(tempfile.gettempdir(), zip_filename)
+            
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for root, dirs, files in os.walk(folder_path):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        try:
+                            arcname = os.path.relpath(file_path, folder_path)
+                            zipf.write(file_path, arcname)
+                        except Exception:
+                            pass
+            
+            with open(zip_path, 'rb') as f:
+                content_bytes = f.read()
+            b64_data = base64.b64encode(content_bytes).decode('utf-8')
+            try:
+                os.remove(zip_path)
+            except:
+                pass
+            return '__FILE_JSON_START__' + json.dumps({'status': 'ok', 'filename': zip_filename, 'data': b64_data}, ensure_ascii=False) + '__FILE_JSON_END__'
+        except Exception as e:
+            return '__FILE_JSON_START__' + json.dumps({'status': 'error', 'message': str(e)}, ensure_ascii=False) + '__FILE_JSON_END__'
+
+    if command_text.startswith("__DOWNLOAD_FILE__:"):
+        path = command_text[len("__DOWNLOAD_FILE__:"):].strip()
+        if (path.startswith('"') and path.endswith('"')) or (path.startswith("'") and path.endswith("'")):
+            path = path[1:-1].strip()
+        try:
+            with open(path, 'rb') as f:
+                content_bytes = f.read()
+            b64_data = base64.b64encode(content_bytes).decode('utf-8')
+            filename = os.path.basename(path)
+            return '__FILE_JSON_START__' + json.dumps({'status': 'ok', 'filename': filename, 'data': b64_data}, ensure_ascii=False) + '__FILE_JSON_END__'
+        except Exception as e:
+            return '__FILE_JSON_START__' + json.dumps({'status': 'error', 'message': str(e)}, ensure_ascii=False) + '__FILE_JSON_END__'
+
+    if command_text.startswith("__LIST_DIR__:"):
+        path = command_text[len("__LIST_DIR__:"):].strip()
+        if (path.startswith('"') and path.endswith('"')) or (path.startswith("'") and path.endswith("'")):
+            path = path[1:-1].strip()
+        if len(path) == 2 and path[1] == ':':
+            path += '\\'
+        try:
+            items = []
+            for e in os.scandir(path):
+                try:
+                    st = e.stat()
+                    items.append({
+                        'name': e.name,
+                        'is_dir': e.is_dir(),
+                        'size': 0 if e.is_dir() else st.st_size,
+                        'mtime': time.strftime('%Y-%m-%d %H:%M', time.localtime(st.st_mtime))
+                    })
+                except:
+                    items.append({
+                        'name': e.name,
+                        'is_dir': e.is_dir(),
+                        'size': 0,
+                        'mtime': ''
+                    })
+            return '__JSON_START__' + json.dumps({'status': 'ok', 'path': path, 'items': items}, ensure_ascii=False) + '__JSON_END__'
+        except Exception as e:
+            return '__JSON_START__' + json.dumps({'status': 'error', 'message': str(e)}, ensure_ascii=False) + '__FILE_JSON_END__'
+
+    try:
+        startupinfo = None
+        if os.name == 'nt':
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        
+        res = subprocess.run(
+            command_text,
+            shell=True,
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            errors='ignore',
+            timeout=15,
+            startupinfo=startupinfo
+        )
+        output = res.stdout + res.stderr
+        if not output.strip():
+            output = "[Bajarildi] Buyruq muvaffaqiyatli bajarildi (natija yo'q)."
+        return output
+    except Exception as e:
+        return f"[Xato] Buyruqni bajarishda xatolik: {e}"
 
 
 @login_required(login_url='login')
 def ajax_send_command(request):
-    """AJAX orqali terminal buyrug'ini qabul qilish"""
+    """AJAX orqali terminal yoki fayl menejeri buyrug'ini agent navbatiga qo'shish"""
     if request.method == "POST":
         command_text = (request.POST.get("command_text") or "").strip()
         computer_name = (request.POST.get("computer_name") or "").strip()
@@ -344,12 +587,20 @@ def ajax_send_command(request):
 def ajax_command_status(request, command_id):
     """AJAX orqali buyruq bajarilish natijasini tekshirish"""
     cmd = get_object_or_404(Command, id=command_id, user=request.user)
-    return JsonResponse({
+    result = {
         "command_id": cmd.id,
         "is_executed": cmd.is_executed,
         "output_result": cmd.output_result or "",
         "created_at": cmd.created_at.strftime("%Y-%m-%d %H:%M:%S")
-    })
+    }
+    if cmd.is_executed and (cmd.output_result or '').startswith(TRANSFER_MARKER):
+        try:
+            metadata = json.loads(cmd.output_result[len(TRANSFER_MARKER):])
+            result['transfer_url'] = reverse('download_command_transfer', args=[cmd.id])
+            result['transfer_filename'] = metadata.get('filename', 'download')
+        except (TypeError, ValueError, json.JSONDecodeError):
+            pass
+    return JsonResponse(result)
 
 
 # ==========================================

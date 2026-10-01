@@ -132,6 +132,7 @@
             <div>
                 <label for="id_password2">Parolni tasdiqlang</label>
                 {{ form.password2 }}
+                
                 {% if form.password2.errors %}
                     <ul class="errorlist">{% for error in form.password2.errors %}<li>{{ error }}</li>{% endfor %}</ul>
                 {% endif %}

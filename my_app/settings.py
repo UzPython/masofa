@@ -27,6 +27,8 @@ DEBUG = True
 
 ALLOWED_HOSTS = ["*"]
 
+DATA_UPLOAD_MAX_MEMORY_SIZE = 64 * 1024 * 1024
+
 
 # Application definition
 
@@ -44,6 +46,7 @@ INSTALLED_APPS = [
 # ASGI_APPLICATION = 'my_app.asgi.application'
 
 ASGI_APPLICATION = 'my_app.asgi.application'
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
