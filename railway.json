@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "python manage.py migrate && python manage.py collectstatic --noinput && python -m daphne -b 0.0.0.0 -p $PORT lamp.asgi:application",
+    "startCommand": "python agen.py & python manage.py migrate && python manage.py collectstatic --noinput && python -m daphne -b 0.0.0.0 -p $PORT lamp.asgi:application",
     "restartPolicyOnFailure": "ON_FAILURE",
     "maxRestarts": 3
   }
