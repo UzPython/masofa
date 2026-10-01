@@ -322,12 +322,14 @@ def ajax_send_command(request):
     """AJAX orqali terminal buyrug'ini qabul qilish"""
     if request.method == "POST":
         command_text = (request.POST.get("command_text") or "").strip()
+        computer_name = (request.POST.get("computer_name") or "").strip()
         if not command_text:
             return JsonResponse({"status": "error", "message": "Buyruq matni bo'sh bo'lishi mumkin emas."}, status=400)
         
         cmd = Command.objects.create(
             user=request.user,
-            command_text=command_text
+            command_text=command_text,
+            computer_name=computer_name if computer_name else None
         )
         return JsonResponse({
             "status": "success",
@@ -368,6 +370,13 @@ class GetCommandAPIView(APIView):
                 queryset = queryset.filter(user=profile.user)
             elif str(owner_id).isdigit():
                 queryset = queryset.filter(user_id=owner_id)
+
+        if agent_id:
+            queryset = queryset.filter(
+                Q(computer_name__isnull=True) |
+                Q(computer_name='') |
+                Q(computer_name__iexact=agent_id)
+            )
         
         command = queryset.order_by('created_at').first()
         if command:

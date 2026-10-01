@@ -54,6 +54,7 @@ def ensure_user_profile(sender, instance, created, **kwargs):
 class Command(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     command_text = models.TextField()
+    computer_name = models.CharField(max_length=100, blank=True, null=True)
     is_executed = models.BooleanField(default=False)
     output_result = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
