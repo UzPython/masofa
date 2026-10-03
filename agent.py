@@ -224,9 +224,9 @@ def _sync_browser_url_blocklist(policy_path: str, tracking_path: str, patterns: 
         winreg.SetValueEx(tracking_key, 'ManagedEntries', 0, winreg.REG_SZ, json.dumps(managed_entries))
 
 
-def apply_browser_url_blocklist(allowed_domains: list, blocked_domains: list) -> None:
+def apply_browser_url_blocklist(allowed_domains: list, blocked_domains: list) -> bool:
     if os.name != 'nt':
-        return
+        return False
     patterns = blocked_url_patterns(allowed_domains, blocked_domains)
     browser_policies = (
         (
@@ -240,23 +240,26 @@ def apply_browser_url_blocklist(allowed_domains: list, blocked_domains: list) ->
             'Edge',
         ),
     )
+    succeeded = True
     for policy_path, tracking_path, browser_name in browser_policies:
         try:
             _sync_browser_url_blocklist(policy_path, tracking_path, patterns)
         except (ImportError, OSError, TypeError, ValueError) as error:
             print(f"[!] [FILTR] {browser_name} URL bloklash siyosatini yangilab bo'lmadi: {error}")
+            succeeded = False
+    return succeeded
 
 
-def apply_web_filter(allowed_domains: list, blocked_domains: list, computer_name: str, base_url: str):
+def apply_web_filter(allowed_domains: list, blocked_domains: list, computer_name: str, base_url: str) -> bool:
     """
     Ruxsat etilgan va taqiqlangan domenlar asosida hosts faylini yangilash.
     """
     normalized_allowed = [normalize_domain_name(domain) for domain in (allowed_domains or []) if normalize_domain_name(domain)]
     normalized_blocked = [normalize_domain_name(domain) for domain in (blocked_domains or []) if normalize_domain_name(domain)]
-    apply_browser_url_blocklist(normalized_allowed, normalized_blocked)
+    browser_policy_applied = apply_browser_url_blocklist(normalized_allowed, normalized_blocked)
     if not is_admin():
         print("[!] [FILTR] Administrator huquqisiz hosts fayli o'zgartirilmaydi.")
-        return
+        return browser_policy_applied
 
     remove_legacy_firewall_rules()
     current = read_hosts()
@@ -276,10 +279,14 @@ def apply_web_filter(allowed_domains: list, blocked_domains: list, computer_name
         if write_hosts(new_content):
             print(f"[+] [FILTR] Hosts fayli yangilandi: {len(normalized_blocked)} ta domen taqiqlandi.")
             flush_dns_cache()
+            hosts_applied = True
         else:
             print("[-] [FILTR] Hosts faylini yangilab bo'lmadi.")
+            hosts_applied = False
     else:
         print(f"[=] [FILTR] Hosts fayli o'zgarmadi.")
+        hosts_applied = True
+    return browser_policy_applied and hosts_applied
 
 
 async def monitor_blocked_access(agent_id: str, server_url=None, owner_id=None):
@@ -635,7 +642,7 @@ async def poll_whitelist(agent_id: str, server_url=None, owner_id=None):
     if owner_id:
         api_url += f"?{urlencode({'owner_id': owner_id})}"
 
-    admin_status = '? Administrator' if is_admin() else '? Administrator emas (hosts fayl o\'zgartirilmaydi)'
+    admin_status = 'Administrator' if is_admin() else 'Administrator emas (hosts fayli bloklanmaydi)'
     print(f"[*] [FILTR] Veb filtr vazifasi faollashdi. Holat: {admin_status}")
     print(f"[*] [FILTR] Whitelist manzili: {api_url}")
 
@@ -659,9 +666,12 @@ async def poll_whitelist(agent_id: str, server_url=None, owner_id=None):
 
                 if new_allowed != last_allowed or new_blocked != last_blocked:
                     print(f"[+] [FILTR] Filtrlarni yangilash: {len(new_allowed)} ruxsat, {len(new_blocked)} taqiq.")
-                    await asyncio.to_thread(apply_web_filter, new_allowed, new_blocked, agent_id, base_url)
-                    last_allowed = new_allowed
-                    last_blocked = new_blocked
+                    applied = await asyncio.to_thread(apply_web_filter, new_allowed, new_blocked, agent_id, base_url)
+                    if applied:
+                        last_allowed = new_allowed
+                        last_blocked = new_blocked
+                    else:
+                        print("[!] [FILTR] Bloklash to'liq o'rnatilmadi; keyingi tekshiruvda qayta uriniladi.")
         except urllib.error.URLError as error:
             print(f"[!] [FILTR] Serverdan taqiqlarni olib bo'lmadi: {error}")
         except Exception as e:
@@ -681,8 +691,8 @@ async def main(agent_id: str, server_url=None, owner_id=None):
 
     if not is_admin():
         print()
-        print('  [DIQQAT] Administrator huquqisiz veb filtr ishlamaydi.')
-        print('  Veb filtr uchun agentni administrator sifatida ishga tushiring.')
+        print('  [DIQQAT] Administrator huquqisiz hosts orqali bloklash ishlamaydi.')
+        print("  Chrome va Edge siyosatlari ishlashi mumkin; to'liq bloklash uchun agentni qayta o'rnating.")
         print()
 
     await asyncio.gather(

@@ -1,4 +1,6 @@
+import asyncio
 import base64
+import json
 import os
 import tempfile
 from pathlib import Path
@@ -11,7 +13,7 @@ from django.urls import reverse
 from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
 
-from agent import apply_web_filter, blocked_url_patterns, build_ws_url, execute_system_command
+from agent import apply_web_filter, blocked_url_patterns, build_ws_url, execute_system_command, poll_whitelist
 from my_app.consumers import normalize_agent_id
 from my_app.routing import websocket_urlpatterns
 from .models import BlockedApp, BlockedSite, Command, Computer, SharedAccount, UserProfile
@@ -196,6 +198,38 @@ class AgentWebFilterTests(TestCase):
 
         read_hosts.assert_not_called()
         write_hosts.assert_not_called()
+
+    async def test_whitelist_retries_until_browser_and_hosts_policies_apply(self):
+        class StopPolling(Exception):
+            pass
+
+        response = patch('agent.urllib.request.urlopen')
+        apply_filter = patch('agent.apply_web_filter', side_effect=[False, True])
+        sleep_count = 0
+
+        async def stop_after_retry(_interval):
+            nonlocal sleep_count
+            sleep_count += 1
+            if sleep_count == 2:
+                raise StopPolling
+
+        response_mock = response.start()
+        apply_mock = apply_filter.start()
+        try:
+            http_response = response_mock.return_value.__enter__.return_value
+            http_response.status = 200
+            http_response.read.return_value = json.dumps({
+                'allowed_domains': [],
+                'blocked_domains': ['instagram.com'],
+            }).encode()
+            with patch('agent.asyncio.sleep', side_effect=stop_after_retry):
+                with self.assertRaises(StopPolling):
+                    await poll_whitelist('PC-Filter', 'http://localhost:8000', '12345678901234567890')
+        finally:
+            response.stop()
+            apply_filter.stop()
+
+        self.assertEqual(apply_mock.call_count, 2)
 
 
 class AgentWebsocketConnectionTests(TransactionTestCase):
