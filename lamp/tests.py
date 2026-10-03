@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,7 +14,7 @@ from django.urls import reverse
 from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
 
-from agent import apply_web_filter, blocked_url_patterns, build_ws_url, execute_system_command, poll_whitelist
+from agent import apply_web_filter, blocked_url_patterns, build_ws_url, execute_system_command, poll_whitelist, send_screen
 from my_app.consumers import normalize_agent_id
 from my_app.routing import websocket_urlpatterns
 from .models import BlockedApp, BlockedSite, Command, Computer, SharedAccount, UserProfile
@@ -67,6 +68,58 @@ class AgentStreamConfigTests(TestCase):
         )
 
 
+class AgentScreenCaptureTests(TestCase):
+    def test_screen_capture_does_not_block_other_agent_tasks(self):
+        heartbeat_count = [0]
+        heartbeats_during_capture = []
+
+        class FakeScreenshot:
+            def save(self, output, format, quality):
+                output.write(b'jpeg-frame')
+
+        def slow_screenshot():
+            start_count = heartbeat_count[0]
+            time.sleep(0.05)
+            heartbeats_during_capture.append(heartbeat_count[0] - start_count)
+            return FakeScreenshot()
+
+        class FakeWebSocket:
+            def __init__(self):
+                self.frames = []
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc_value, traceback):
+                return False
+
+            async def send(self, frame):
+                self.frames.append(frame)
+
+        async def run_agent_tasks():
+            async def heartbeat():
+                while True:
+                    heartbeat_count[0] += 1
+                    await asyncio.sleep(0.001)
+
+            heartbeat_task = asyncio.create_task(heartbeat())
+            screen_task = asyncio.create_task(send_screen('PC-05'))
+            await asyncio.sleep(0.12)
+            screen_task.cancel()
+            heartbeat_task.cancel()
+            await asyncio.gather(screen_task, heartbeat_task, return_exceptions=True)
+
+        with (
+            patch('agent.pyautogui.screenshot', side_effect=slow_screenshot),
+            patch('agent.websockets.connect', return_value=FakeWebSocket()),
+            patch('agent.build_ws_url', return_value='ws://127.0.0.1/ws/screen/PC-05/'),
+        ):
+            asyncio.run(run_agent_tasks())
+
+        self.assertTrue(heartbeats_during_capture)
+        self.assertTrue(all(count > 0 for count in heartbeats_during_capture))
+
+
 class AgentSetupTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='agent-setup', password='StrongPass123')
@@ -101,7 +154,16 @@ class AgentSetupTests(TestCase):
         self.assertIn("New-ScheduledTaskPrincipal -UserId $userIdentity -LogonType Interactive -RunLevel Highest", setup_script)
         self.assertIn("Register-ScheduledTask -TaskName 'Masofa Agent'", setup_script)
         self.assertIn("GetFolderPath('Startup')", setup_script)
-        self.assertNotIn('Start-Process -FilePath $pythonw', setup_script)
+        self.assertIn("$agentLauncherPath = Join-Path $installDir 'masofa_212.bat'", setup_script)
+        self.assertIn("'set \"AGENT_PYTHON=%AGENT_DIR%.venv-py314\\Scripts\\pythonw.exe\"'", setup_script)
+        self.assertIn('New-ScheduledTaskAction -Execute $env:ComSpec -Argument', setup_script)
+        self.assertIn("('/d /c \"\"' + $agentLauncherPath + '\"\"')", setup_script)
+        self.assertIn(
+            '--owner-id "{}" --server-url "https://testserver:80"'.format(self.user.profile.account_id),
+            setup_script,
+        )
+        self.assertIn('New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero)', setup_script)
+        self.assertNotIn('New-ScheduledTaskAction -Execute $pythonw', setup_script)
         self.assertIn("Join-Path $env:LOCALAPPDATA 'MasofaAgent'", setup_script)
         self.assertIn('& $launcher @launcherArgs -m venv $venvDir', setup_script)
         self.assertNotIn('--clear $venvDir', setup_script)

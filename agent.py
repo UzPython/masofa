@@ -436,10 +436,8 @@ async def send_screen(agent_id: str, server_url=None, owner_id=None):
             async with websockets.connect(websocket_url, max_size=10_000_000) as websocket:
                 print(f"[+] [EKRAN] Ulandi! Jonli efir uzatilmoqda ({agent_id})...")
                 while True:
-                    screenshot = pyautogui.screenshot()
-                    img_byte_arr = io.BytesIO()
-                    screenshot.save(img_byte_arr, format='JPEG', quality=SCREEN_QUALITY)
-                    await websocket.send(img_byte_arr.getvalue())
+                    frame = await asyncio.to_thread(_capture_screen_frame)
+                    await websocket.send(frame)
                     await asyncio.sleep(FPS_DELAY)
         except (websockets.ConnectionClosed, ConnectionRefusedError, OSError) as e:
             print(f"[-] [EKRAN] Ulanish uzildi: {e}. 3 soniyadan so'ng qayta ulanish...")
@@ -447,6 +445,13 @@ async def send_screen(agent_id: str, server_url=None, owner_id=None):
         except Exception as e:
             print(f"[!] [EKRAN] Kutilmagan xatolik: {e}")
             await asyncio.sleep(3)
+
+
+def _capture_screen_frame() -> bytes:
+    screenshot = pyautogui.screenshot()
+    img_byte_arr = io.BytesIO()
+    screenshot.save(img_byte_arr, format='JPEG', quality=SCREEN_QUALITY)
+    return img_byte_arr.getvalue()
 
 
 def upload_transfer_file(base_url: str, command_id: int, file_path: str, filename: str) -> None:

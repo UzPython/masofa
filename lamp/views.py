@@ -562,7 +562,6 @@ def download_agent_bat(request):
             throw 'Python virtual muhitini yaratib bo''lmadi.'
         }
         $agentPython = Join-Path $venvDir 'Scripts\\python.exe'
-        $pythonw = Join-Path $venvDir 'Scripts\\pythonw.exe'
 
         & $agentPython -m pip install --upgrade pip websockets pyautogui pillow
         if ($LASTEXITCODE -ne 0) {
@@ -579,17 +578,28 @@ def download_agent_bat(request):
             throw 'Agent fayli serverdan yuklanmadi.'
         }
 
-        $quote = [string][char]34
-        $arguments = $quote + $agentPath + $quote + ' ' + $quote + $env:COMPUTERNAME + $quote + ' --owner-id __ACCOUNT_ID__ --server-url ' + $quote + $serverUrl + $quote
         $userIdentity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
         $legacyShortcut = Join-Path ([Environment]::GetFolderPath('Startup')) 'Masofa Agent.lnk'
         if (Test-Path $legacyShortcut) {
             Remove-Item -LiteralPath $legacyShortcut -Force
         }
-        $action = New-ScheduledTaskAction -Execute $pythonw -Argument $arguments -WorkingDirectory $installDir
+        $agentLauncherPath = Join-Path $installDir 'masofa_212.bat'
+        $launcherLines = @(
+            '@echo off',
+            'setlocal',
+            'set "AGENT_DIR=%~dp0"',
+            'set "AGENT_PYTHON=%AGENT_DIR%.venv-py314\\Scripts\\pythonw.exe"',
+            'if not exist "%AGENT_PYTHON%" exit /b 1',
+            '"%AGENT_PYTHON%" "%AGENT_DIR%agent.py" "%COMPUTERNAME%" --owner-id "__ACCOUNT_ID__" --server-url "__SERVER_URL__"',
+            'exit /b %ERRORLEVEL%'
+        )
+        $agentLauncher = $launcherLines -join "`r`n"
+        [IO.File]::WriteAllText($agentLauncherPath, $agentLauncher, [Text.Encoding]::ASCII)
+        $action = New-ScheduledTaskAction -Execute $env:ComSpec -Argument ('/d /c ""' + $agentLauncherPath + '""') -WorkingDirectory $installDir
         $trigger = New-ScheduledTaskTrigger -AtLogOn -User $userIdentity
         $principal = New-ScheduledTaskPrincipal -UserId $userIdentity -LogonType Interactive -RunLevel Highest
-        Register-ScheduledTask -TaskName 'Masofa Agent' -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
+        $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+        Register-ScheduledTask -TaskName 'Masofa Agent' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
         Start-ScheduledTask -TaskName 'Masofa Agent'
         Write-Host 'Masofa Agent o''rnatildi va ishga tushirildi.' -ForegroundColor Green
     } catch {
