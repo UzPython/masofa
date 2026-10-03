@@ -148,16 +148,117 @@ def flush_dns_cache():
         print(f"[-] [FILTR] DNS keshni tozalashda xatolik: {e}")
 
 
+def remove_legacy_firewall_rules():
+    if os.name != 'nt':
+        return
+    try:
+        subprocess.run(
+            [
+                'powershell.exe',
+                '-NoProfile',
+                '-Command',
+                "Get-NetFirewallRule -DisplayName 'MasofaBlock_*' -ErrorAction SilentlyContinue | Remove-NetFirewallRule",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        print(f"[!] [FILTR] Eski Masofa firewall qoidalarini o'chirib bo'lmadi: {error}")
+
+
+def blocked_url_patterns(allowed_domains: list, blocked_domains: list) -> list[str]:
+    allowed = {normalize_domain_name(domain) for domain in (allowed_domains or [])}
+    blocked = {
+        normalize_domain_name(domain)
+        for domain in (blocked_domains or [])
+        if normalize_domain_name(domain)
+    } - allowed
+    return sorted(
+        pattern
+        for domain in blocked
+        for pattern in (f'*://{domain}/*', f'*://*.{domain}/*')
+    )
+
+
+def _sync_browser_url_blocklist(policy_path: str, tracking_path: str, patterns: list[str]) -> None:
+    import winreg
+
+    access = winreg.KEY_READ | winreg.KEY_WRITE
+    with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, policy_path, 0, access) as policy_key:
+        _, value_count, _ = winreg.QueryInfoKey(policy_key)
+        existing = {
+            name: value
+            for index in range(value_count)
+            for name, value, _ in [winreg.EnumValue(policy_key, index)]
+            if isinstance(value, str)
+        }
+
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, tracking_path, 0, access) as tracking_key:
+                previous_json, _ = winreg.QueryValueEx(tracking_key, 'ManagedEntries')
+            previous_entries = json.loads(previous_json)
+        except FileNotFoundError:
+            previous_entries = []
+
+        for name, value in previous_entries:
+            if existing.get(name) == value:
+                winreg.DeleteValue(policy_key, name)
+                existing.pop(name)
+
+        managed_entries = []
+        next_name = 1
+        for pattern in patterns:
+            if pattern in existing.values():
+                continue
+            while str(next_name) in existing:
+                next_name += 1
+            name = str(next_name)
+            winreg.SetValueEx(policy_key, name, 0, winreg.REG_SZ, pattern)
+            existing[name] = pattern
+            managed_entries.append([name, pattern])
+            next_name += 1
+
+    with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, tracking_path, 0, access) as tracking_key:
+        winreg.SetValueEx(tracking_key, 'ManagedEntries', 0, winreg.REG_SZ, json.dumps(managed_entries))
+
+
+def apply_browser_url_blocklist(allowed_domains: list, blocked_domains: list) -> None:
+    if os.name != 'nt':
+        return
+    patterns = blocked_url_patterns(allowed_domains, blocked_domains)
+    browser_policies = (
+        (
+            r'Software\Policies\Google\Chrome\URLBlocklist',
+            r'Software\MasofaAgent\BrowserPolicies\Chrome',
+            'Chrome',
+        ),
+        (
+            r'Software\Policies\Microsoft\Edge\URLBlocklist',
+            r'Software\MasofaAgent\BrowserPolicies\Edge',
+            'Edge',
+        ),
+    )
+    for policy_path, tracking_path, browser_name in browser_policies:
+        try:
+            _sync_browser_url_blocklist(policy_path, tracking_path, patterns)
+        except (ImportError, OSError, TypeError, ValueError) as error:
+            print(f"[!] [FILTR] {browser_name} URL bloklash siyosatini yangilab bo'lmadi: {error}")
+
+
 def apply_web_filter(allowed_domains: list, blocked_domains: list, computer_name: str, base_url: str):
     """
-    Ruxsat etilgan va taqiqlangan domenlar asosida hosts faylini va firewall qoidalarini yangilash.
+    Ruxsat etilgan va taqiqlangan domenlar asosida hosts faylini yangilash.
     """
-    if not is_admin():
-        print("[!] [FILTR] Administrator huquqisiz hosts va firewall o'zgartirilmaydi.")
-        return
-
     normalized_allowed = [normalize_domain_name(domain) for domain in (allowed_domains or []) if normalize_domain_name(domain)]
     normalized_blocked = [normalize_domain_name(domain) for domain in (blocked_domains or []) if normalize_domain_name(domain)]
+    apply_browser_url_blocklist(normalized_allowed, normalized_blocked)
+    if not is_admin():
+        print("[!] [FILTR] Administrator huquqisiz hosts fayli o'zgartirilmaydi.")
+        return
+
+    remove_legacy_firewall_rules()
     current = read_hosts()
     clean = strip_masofa_block(current)
 
@@ -175,11 +276,6 @@ def apply_web_filter(allowed_domains: list, blocked_domains: list, computer_name
         if write_hosts(new_content):
             print(f"[+] [FILTR] Hosts fayli yangilandi: {len(normalized_blocked)} ta domen taqiqlandi.")
             flush_dns_cache()
-            try:
-                for domain in normalized_blocked:
-                    subprocess.run(f'netsh advfirewall firewall add rule name="MasofaBlock_{domain}" dir=out action=block remoteip=any', shell=True, capture_output=True)
-            except Exception:
-                pass
         else:
             print("[-] [FILTR] Hosts faylini yangilab bo'lmadi.")
     else:
@@ -190,6 +286,8 @@ async def monitor_blocked_access(agent_id: str, server_url=None, owner_id=None):
     """Taqiqlangan saytlarga kirish urinishlarini faol kuzatish, brauzerni yopish va serverga xabar berish."""
     base_url = get_http_base_url(server_url)
     api_url = f"{base_url}/api/whitelist/"
+    if owner_id:
+        api_url += f"?{urlencode({'owner_id': owner_id})}"
     check_site_url = f"{base_url}/api/check-site/"
 
     while True:
@@ -244,8 +342,8 @@ async def monitor_blocked_access(agent_id: str, server_url=None, owner_id=None):
                                 subprocess.run("taskkill /f /im chrome.exe", shell=True, capture_output=True)
                                 subprocess.run("taskkill /f /im msedge.exe", shell=True, capture_output=True)
                                 subprocess.run("taskkill /f /im firefox.exe", shell=True, capture_output=True)
-                            except Exception:
-                                pass
+                            except Exception as error:
+                                print(f"[!] [FILTR] Taqiqlangan sayt nazoratida xatolik: {error}")
                         await asyncio.to_thread(kill_browsers)
                         break
         except Exception:
@@ -527,20 +625,22 @@ async def poll_commands(agent_id: str, server_url=None, owner_id=None):
         await asyncio.sleep(1.5)
 
 
-async def poll_whitelist(agent_id: str, server_url=None):
+async def poll_whitelist(agent_id: str, server_url=None, owner_id=None):
     """
     Serverdan ruxsat etilgan va taqiqlangan domenlar ro'yxatini davriy ravishda yuklab,
     hosts faylini yangilash orqali bloklashni amalga oshirish.
     """
     base_url = get_http_base_url(server_url)
     api_url = f"{base_url}/api/whitelist/"
+    if owner_id:
+        api_url += f"?{urlencode({'owner_id': owner_id})}"
 
     admin_status = '? Administrator' if is_admin() else '? Administrator emas (hosts fayl o\'zgartirilmaydi)'
     print(f"[*] [FILTR] Veb filtr vazifasi faollashdi. Holat: {admin_status}")
     print(f"[*] [FILTR] Whitelist manzili: {api_url}")
 
-    last_allowed: list = []
-    last_blocked: list = []
+    last_allowed = None
+    last_blocked = None
 
     while True:
         try:
@@ -562,8 +662,8 @@ async def poll_whitelist(agent_id: str, server_url=None):
                     await asyncio.to_thread(apply_web_filter, new_allowed, new_blocked, agent_id, base_url)
                     last_allowed = new_allowed
                     last_blocked = new_blocked
-        except urllib.error.URLError:
-            pass
+        except urllib.error.URLError as error:
+            print(f"[!] [FILTR] Serverdan taqiqlarni olib bo'lmadi: {error}")
         except Exception as e:
             print(f"[!] [FILTR] Xatolik: {e}")
 
@@ -588,7 +688,7 @@ async def main(agent_id: str, server_url=None, owner_id=None):
     await asyncio.gather(
         send_screen(agent_id, server_url, owner_id),
         poll_commands(agent_id, server_url, owner_id),
-        poll_whitelist(agent_id, server_url),
+        poll_whitelist(agent_id, server_url, owner_id),
         monitor_blocked_access(agent_id, server_url, owner_id),
         monitor_blocked_apps(agent_id, server_url, owner_id),
     )

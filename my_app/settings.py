@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'lamp',
+    'site_rules',
     'rest_framework',
     'channels',
 ]

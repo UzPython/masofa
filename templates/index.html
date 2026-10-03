@@ -861,7 +861,7 @@
                     </label>
                     <div class="flex flex-wrap gap-2" id="fileComputerSelector">
                         {% for computer in computers %}
-                        <button type="button" data-computer-name="{{ computer.name }}" class="file-computer-btn px-3.5 py-2 rounded-xl text-xs font-semibold border transition {% if forloop.first %}bg-indigo-600 text-white border-indigo-600 shadow-sm{% else %}bg-white hover:bg-slate-100 text-slate-700 border-slate-200{% endif %}">
+                        <button type="button" data-computer-name="{{ computer.name }}" data-owner-id="{% if computer.owner %}{{ computer.owner.profile.account_id }}{% else %}{{ account_id }}{% endif %}" class="file-computer-btn px-3.5 py-2 rounded-xl text-xs font-semibold border transition {% if forloop.first %}bg-indigo-600 text-white border-indigo-600 shadow-sm{% else %}bg-white hover:bg-slate-100 text-slate-700 border-slate-200{% endif %}">
                             <span class="h-2 w-2 rounded-full inline-block mr-1.5 {% if computer.is_online %}bg-emerald-400{% else %}bg-slate-400{% endif %}"></span>
                             {{ computer.name }} {% if computer.owner != request.user and computer.owner is not None %}(Ulashilgan){% endif %}
                         </button>
@@ -870,6 +870,7 @@
                         {% endfor %}
                     </div>
                     <input type="hidden" id="selectedFileComputer" value="{% if computers %}{{ computers.0.name }}{% endif %}">
+                    <input type="hidden" id="selectedFileOwnerId" value="{% if computers and computers.0.owner %}{{ computers.0.owner.profile.account_id }}{% else %}{{ account_id }}{% endif %}">
                 </div>
 
                 <form id="fileBrowserForm" class="flex items-center gap-2">
@@ -1015,7 +1016,7 @@
                                     </div>
                                 </div>
                                  <div class="flex items-center gap-2">
-                                     <button type="button" data-computer-name="{% if shared_account.owner.owned_computers.first %}{{ shared_account.owner.owned_computers.first.name }}{% else %}{{ shared_account.display_name }}{% endif %}" class="browse-shared-files-btn bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm" title="Papkalar va fayllarni ko'rish">
+                                     <button type="button" data-computer-name="{% if shared_account.owner.owned_computers.first %}{{ shared_account.owner.owned_computers.first.name }}{% else %}{{ shared_account.display_name }}{% endif %}" data-owner-id="{{ shared_account.owner.profile.account_id }}" class="browse-shared-files-btn bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm" title="Papkalar va fayllarni ko'rish">
                                          <i class="fa-solid fa-folder-open"></i> Papkalar
                                      </button>
                                      {% if shared_account.owner.online_owned_computers %}
@@ -1619,6 +1620,7 @@
         const filePathInput = document.getElementById('filePathInput');
         const fileListScreen = document.getElementById('fileListScreen');
         const selectedFileComputerInput = document.getElementById('selectedFileComputer');
+        const selectedFileOwnerInput = document.getElementById('selectedFileOwnerId');
 
         document.body.addEventListener('click', (e) => {
             const tabBtn = e.target.closest('.tab-btn');
@@ -1629,14 +1631,20 @@
             const sharedFilesBtn = e.target.closest('.browse-shared-files-btn');
             if (sharedFilesBtn) {
                 const compName = sharedFilesBtn.dataset.computerName;
+                const ownerId = sharedFilesBtn.dataset.ownerId;
                 if (compName) {
                     switchTab('tab-files');
-                    const compBtn = document.querySelector(`.file-computer-btn[data-computer-name="${compName}"]`);
+                    const compBtn = Array.from(document.querySelectorAll('.file-computer-btn')).find(
+                        button => button.dataset.computerName === compName && button.dataset.ownerId === ownerId
+                    );
                     if (compBtn) {
                         compBtn.click();
                     } else {
                         if (selectedFileComputerInput) {
                             selectedFileComputerInput.value = compName;
+                        }
+                        if (selectedFileOwnerInput) {
+                            selectedFileOwnerInput.value = ownerId;
                         }
                         loadDirectory('C:\\');
                     }
@@ -1653,6 +1661,9 @@
                 fileCompBtn.classList.add('bg-indigo-600', 'text-white', 'border-indigo-600', 'shadow-sm');
                 if (selectedFileComputerInput) {
                     selectedFileComputerInput.value = fileCompBtn.dataset.computerName;
+                }
+                if (selectedFileOwnerInput) {
+                    selectedFileOwnerInput.value = fileCompBtn.dataset.ownerId;
                 }
                 refreshFiles();
                 return;
@@ -1742,11 +1753,13 @@
 
         window.downloadZip = function(path) {
             const compName = selectedFileComputerInput ? selectedFileComputerInput.value : '';
+            const ownerId = selectedFileOwnerInput ? selectedFileOwnerInput.value : '';
             fileListScreen.innerHTML = `<div class="text-center py-12 text-amber-600 text-xs"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block"></i> "${escapeHtml(path)}" papkasi zip qilib yuklanmoqda...</div>`;
             
             const formData = new FormData();
             formData.append('command_text', `__DOWNLOAD_ZIP__:${path}`);
             if (compName) formData.append('computer_name', compName);
+            if (ownerId) formData.append('computer_owner_id', ownerId);
             const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
             fetch('/api/ajax-send-command/', {
@@ -1829,11 +1842,13 @@
 
         window.downloadFile = function(path) {
             const compName = selectedFileComputerInput ? selectedFileComputerInput.value : '';
+            const ownerId = selectedFileOwnerInput ? selectedFileOwnerInput.value : '';
             fileListScreen.innerHTML = `<div class="text-center py-12 text-emerald-600 text-xs"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block"></i> "${escapeHtml(path)}" fayli yuklanmoqda...</div>`;
             
             const formData = new FormData();
             formData.append('command_text', `__DOWNLOAD_FILE__:${path}`);
             if (compName) formData.append('computer_name', compName);
+            if (ownerId) formData.append('computer_owner_id', ownerId);
             const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
             fetch('/api/ajax-send-command/', {
@@ -1997,12 +2012,16 @@
                 e.preventDefault();
                 const path = filePathInput.value.trim() || 'C:\\';
                 const compName = selectedFileComputerInput ? selectedFileComputerInput.value : '';
+                const ownerId = selectedFileOwnerInput ? selectedFileOwnerInput.value : '';
                 fileListScreen.innerHTML = `<div class="text-center py-12 text-amber-600 text-xs"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block"></i> "${escapeHtml(path)}" (${compName || 'Umumiy'}) papkasi o'qilmoqda...</div>`;
                 
                 const formData = new FormData();
                 formData.append('command_text', `__LIST_DIR__:${path}`);
                 if (compName) {
                     formData.append('computer_name', compName);
+                }
+                if (ownerId) {
+                    formData.append('computer_owner_id', ownerId);
                 }
                 const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 

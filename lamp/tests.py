@@ -11,10 +11,11 @@ from django.urls import reverse
 from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
 
-from agent import build_ws_url, execute_system_command
+from agent import apply_web_filter, blocked_url_patterns, build_ws_url, execute_system_command
 from my_app.consumers import normalize_agent_id
 from my_app.routing import websocket_urlpatterns
-from .models import BlockedApp, Command, Computer, SharedAccount, UserProfile
+from .models import BlockedApp, BlockedSite, Command, Computer, SharedAccount, UserProfile
+from site_rules.models import AgentCommandRoute, SiteRule
 
 
 class AgentIdValidationTests(TestCase):
@@ -93,8 +94,12 @@ class AgentSetupTests(TestCase):
         self.assertGreater(len(setup_lines), 1)
         self.assertIn("Invoke-WebRequest -UseBasicParsing -Uri ($serverUrl + '/agent/script/')", setup_script)
         self.assertIn('\n        $installDir =', setup_script)
+        self.assertIn('Start-Process -FilePath', setup_script)
+        self.assertIn("-Verb RunAs -Wait -PassThru", setup_script)
+        self.assertIn("New-ScheduledTaskPrincipal -UserId $userIdentity -LogonType Interactive -RunLevel Highest", setup_script)
+        self.assertIn("Register-ScheduledTask -TaskName 'Masofa Agent'", setup_script)
         self.assertIn("GetFolderPath('Startup')", setup_script)
-        self.assertIn('Start-Process -FilePath $pythonw', setup_script)
+        self.assertNotIn('Start-Process -FilePath $pythonw', setup_script)
         self.assertIn("Join-Path $env:LOCALAPPDATA 'MasofaAgent'", setup_script)
         self.assertIn('& $launcher @launcherArgs -m venv $venvDir', setup_script)
         self.assertNotIn('--clear $venvDir', setup_script)
@@ -150,6 +155,47 @@ class AgentFileTransferTests(TestCase):
 
         self.assertIn('"status": "error"', result)
         self.assertIn('4 GiB', result)
+
+
+class AgentWebFilterTests(TestCase):
+    def test_blocked_domains_include_all_browser_subdomains_and_respect_allow_rules(self):
+        patterns = blocked_url_patterns(
+            ['allowed.example'],
+            ['python.org', 'allowed.example'],
+        )
+
+        self.assertEqual(
+            patterns,
+            ['*://*.python.org/*', '*://python.org/*'],
+        )
+
+    def test_admin_filter_writes_only_blocked_hosts_entries(self):
+        with (
+            patch('agent.is_admin', return_value=True),
+            patch('agent.apply_browser_url_blocklist'),
+            patch('agent.read_hosts', return_value='127.0.0.1 localhost\n'),
+            patch('agent.write_hosts') as write_hosts,
+            patch('agent.flush_dns_cache'),
+            patch('agent.remove_legacy_firewall_rules') as remove_firewall_rules,
+        ):
+            apply_web_filter([], ['python.org'], 'PC-Filter', 'http://localhost:8000')
+
+        written_hosts = write_hosts.call_args.args[0]
+        self.assertIn('127.0.0.1  python.org', written_hosts)
+        self.assertIn('127.0.0.1  www.python.org', written_hosts)
+        remove_firewall_rules.assert_called_once_with()
+
+    def test_filter_reports_missing_admin_rights_without_changing_hosts(self):
+        with (
+            patch('agent.is_admin', return_value=False),
+            patch('agent.apply_browser_url_blocklist'),
+            patch('agent.read_hosts') as read_hosts,
+            patch('agent.write_hosts') as write_hosts,
+        ):
+            apply_web_filter([], ['python.org'], 'PC-Filter', 'http://localhost:8000')
+
+        read_hosts.assert_not_called()
+        write_hosts.assert_not_called()
 
 
 class AgentWebsocketConnectionTests(TransactionTestCase):
@@ -243,6 +289,70 @@ class UserAccessIsolationTests(TestCase):
         visible = Computer.objects.filter(Q(owner=user_a) | Q(shared_with=user_a)).distinct()
         self.assertTrue(visible.filter(name='PC-A').exists())
         self.assertFalse(visible.filter(name='PC-B').exists())
+
+    def test_shared_computer_command_is_routed_to_its_owner_agent(self):
+        owner = get_user_model().objects.create_user(username='route-owner', password='StrongPass123')
+        recipient = get_user_model().objects.create_user(username='route-recipient', password='StrongPass123')
+        Computer.objects.create(owner=owner, name='PC-Shared')
+        Computer.objects.create(owner=recipient, name='PC-Shared')
+        SharedAccount.objects.create(owner=owner, recipient=recipient, display_name='Shared PC')
+        self.client.force_login(recipient)
+
+        response = self.client.post(
+            reverse('ajax_send_command'),
+            {
+                'command_text': '__LIST_DIR__:C:\\',
+                'computer_name': 'PC-Shared',
+                'computer_owner_id': owner.profile.account_id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        command = Command.objects.get(pk=response.json()['command_id'])
+        route = AgentCommandRoute.objects.get(command_id=command.pk)
+        self.assertEqual(command.user, recipient)
+        self.assertEqual(route.target_owner, owner)
+        self.assertEqual(route.computer_name, 'PC-Shared')
+
+        recipient_agent_response = self.client.get(
+            reverse('api-command'),
+            {'owner_id': recipient.profile.account_id, 'agent_id': 'PC-Shared'},
+        )
+        agent_response = self.client.get(
+            reverse('api-command'),
+            {'owner_id': owner.profile.account_id, 'agent_id': 'PC-Shared'},
+        )
+        self.assertIsNone(recipient_agent_response.json()['id'])
+        self.assertEqual(agent_response.json()['id'], command.pk)
+
+        dashboard_response = self.client.get(reverse('home'))
+        self.assertEqual(dashboard_response.status_code, 200)
+        self.assertContains(
+            dashboard_response,
+            f'data-computer-name="PC-Shared" data-owner-id="{owner.profile.account_id}"',
+        )
+        self.assertContains(
+            dashboard_response,
+            f'data-computer-name="PC-Shared" data-owner-id="{recipient.profile.account_id}"',
+        )
+
+    def test_shared_computer_command_rejects_unshared_owner_id(self):
+        owner = get_user_model().objects.create_user(username='route-private-owner', password='StrongPass123')
+        recipient = get_user_model().objects.create_user(username='route-private-recipient', password='StrongPass123')
+        Computer.objects.create(owner=owner, name='PC-Private')
+        self.client.force_login(recipient)
+
+        response = self.client.post(
+            reverse('ajax_send_command'),
+            {
+                'command_text': '__LIST_DIR__:C:\\',
+                'computer_name': 'PC-Private',
+                'computer_owner_id': owner.profile.account_id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(Command.objects.exists())
 
     def test_sharing_account_id_adds_owner_computer_to_recipient_dashboard(self):
         owner = get_user_model().objects.create_user(username='owner', password='StrongPass123')
@@ -459,3 +569,119 @@ class BlockedAppIsolationTests(TestCase):
         data_a = response_a.json()
         self.assertIn('app_a.exe', data_a['blocked_apps'])
         self.assertNotIn('app_b.exe', data_a['blocked_apps'])
+
+    def test_shared_recipient_blocked_app_applies_to_owner_agent(self):
+        owner = get_user_model().objects.create_user(username='app-policy-owner', password='StrongPass123')
+        recipient = get_user_model().objects.create_user(username='app-policy-recipient', password='StrongPass123')
+        SharedAccount.objects.create(owner=owner, recipient=recipient, display_name='Shared PC')
+        BlockedApp.objects.create(user=recipient, name='blocked-for-shared.exe')
+
+        response = self.client.get(
+            reverse('api-whitelist'),
+            {'owner_id': owner.profile.account_id},
+        )
+
+        self.assertIn('blocked-for-shared.exe', response.json()['blocked_apps'])
+
+
+class SiteRuleIsolationTests(TestCase):
+    def setUp(self):
+        self.user_a = get_user_model().objects.create_user(username='site-owner-a', password='StrongPass123')
+        self.user_b = get_user_model().objects.create_user(username='site-owner-b', password='StrongPass123')
+
+    def test_added_site_is_visible_only_to_adding_account(self):
+        self.client.force_login(self.user_a)
+        response = self.client.post(
+            reverse('home'),
+            {'form_type': 'blocked_site', 'domain': 'private-example.com'},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'private-example.com')
+        rule = SiteRule.objects.get(domain='private-example.com', is_blocked=True)
+        self.assertEqual(rule.user, self.user_a)
+
+        self.client.force_login(self.user_b)
+        response = self.client.get(reverse('home'))
+        self.assertNotContains(response, 'private-example.com')
+
+    def test_agent_whitelist_returns_only_owner_site_rules(self):
+        SiteRule.objects.create(user=self.user_a, domain='allowed-a.example', is_blocked=False)
+        SiteRule.objects.create(user=self.user_a, domain='blocked-a.example', is_blocked=True)
+        SiteRule.objects.create(user=self.user_b, domain='blocked-b.example', is_blocked=True)
+
+        response = self.client.get(
+            reverse('api-whitelist'),
+            {'owner_id': self.user_a.profile.account_id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['allowed_domains'], ['allowed-a.example'])
+        self.assertEqual(response.json()['blocked_domains'], ['blocked-a.example'])
+
+    def test_shared_recipient_site_rules_apply_to_owner_agent(self):
+        SharedAccount.objects.create(
+            owner=self.user_a,
+            recipient=self.user_b,
+            display_name='Shared PC',
+        )
+        SiteRule.objects.create(user=self.user_b, domain='shared-blocked.example', is_blocked=True)
+
+        whitelist_response = self.client.get(
+            reverse('api-whitelist'),
+            {'owner_id': self.user_a.profile.account_id},
+        )
+        check_response = self.client.get(
+            reverse('api-check-site'),
+            {'owner_id': self.user_a.profile.account_id, 'domain': 'www.shared-blocked.example'},
+        )
+
+        self.assertIn('shared-blocked.example', whitelist_response.json()['blocked_domains'])
+        self.assertTrue(check_response.json()['blocked'])
+
+    def test_unidentified_agent_gets_no_accounts_site_rules(self):
+        SiteRule.objects.create(user=self.user_a, domain='blocked-a.example', is_blocked=True)
+
+        response = self.client.get(reverse('api-whitelist'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['allowed_domains'], [])
+        self.assertEqual(response.json()['blocked_domains'], [])
+
+    def test_legacy_global_site_rules_are_hidden_from_all_accounts(self):
+        BlockedSite.objects.create(domain='legacy-global.example')
+        self.client.force_login(self.user_a)
+
+        response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'legacy-global.example')
+
+    def test_site_check_uses_only_requested_owner_rules(self):
+        SiteRule.objects.create(user=self.user_a, domain='blocked-a.example', is_blocked=True)
+
+        response = self.client.get(
+            reverse('api-check-site'),
+            {'owner_id': self.user_a.profile.account_id, 'domain': 'www.blocked-a.example'},
+        )
+        other_account_response = self.client.get(
+            reverse('api-check-site'),
+            {'owner_id': self.user_b.profile.account_id, 'domain': 'www.blocked-a.example'},
+        )
+
+        self.assertTrue(response.json()['blocked'])
+        self.assertFalse(other_account_response.json()['blocked'])
+
+    def test_user_cannot_delete_another_accounts_site_rule(self):
+        rule = SiteRule.objects.create(
+            user=self.user_a,
+            domain='private-example.com',
+            is_blocked=True,
+        )
+        self.client.force_login(self.user_b)
+
+        response = self.client.post(reverse('delete_blocked_site', args=[rule.pk]))
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(SiteRule.objects.filter(pk=rule.pk).exists())

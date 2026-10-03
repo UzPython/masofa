@@ -11,6 +11,7 @@ from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.db import transaction
 from django.db.models import Prefetch, Q
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
@@ -18,8 +19,9 @@ from django.urls import reverse
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from .models import Command, AllowedSite, BlockedSite, BlockedApp, SiteWarning, AppWarning, Computer, SharedAccount, UserProfile
+from .models import Command, BlockedApp, SiteWarning, AppWarning, Computer, SharedAccount, UserProfile
 from .serializers import CommandSerializer
+from site_rules.models import AgentCommandRoute, SiteRule
 
 MAX_FILE_TRANSFER_BYTES = 4 * 1024 * 1024 * 1024
 TRANSFER_MARKER = '__TRANSFER_FILE__:'
@@ -54,6 +56,12 @@ def is_blocked_domain(candidate, blocked_domain):
     if not candidate or not blocked_domain:
         return False
     return candidate == blocked_domain or candidate.endswith(f'.{blocked_domain}')
+
+
+def shared_policy_user_ids(owner):
+    return [owner.pk, *SharedAccount.objects.filter(
+        owner=owner,
+    ).values_list('recipient_id', flat=True)]
 
 
 class TransferFileResponse(FileResponse):
@@ -244,12 +252,20 @@ def index_view(request):
         elif form_type == "allowed_site":
             domain = normalize_domain(request.POST.get("domain"))
             if domain:
-                AllowedSite.objects.get_or_create(domain=domain)
+                SiteRule.objects.get_or_create(
+                    user=request.user,
+                    domain=domain,
+                    is_blocked=False,
+                )
                 messages.success(request, f'{domain} oq ro\'yxatga qo\'shildi.')
         elif form_type == "blocked_site":
             domain = normalize_domain(request.POST.get("domain"))
             if domain:
-                BlockedSite.objects.get_or_create(domain=domain)
+                SiteRule.objects.get_or_create(
+                    user=request.user,
+                    domain=domain,
+                    is_blocked=True,
+                )
                 messages.success(request, f'{domain} qora ro\'yxatga (taqiqlandi) qo\'shildi.')
         elif form_type == "blocked_app":
             app_name = normalize_app_name(request.POST.get("app_name"))
@@ -311,8 +327,14 @@ def index_view(request):
         return redirect('home')
 
     commands = Command.objects.filter(user=request.user).order_by('-created_at')
-    allowed_sites = AllowedSite.objects.all().order_by('-created_at')
-    blocked_sites = BlockedSite.objects.all().order_by('-created_at')
+    allowed_sites = SiteRule.objects.filter(
+        user=request.user,
+        is_blocked=False,
+    ).order_by('-created_at')
+    blocked_sites = SiteRule.objects.filter(
+        user=request.user,
+        is_blocked=True,
+    ).order_by('-created_at')
     blocked_apps = BlockedApp.objects.filter(user=request.user).order_by('-created_at')
     warnings = SiteWarning.objects.filter(
         Q(user=request.user) | Q(user__incoming_shares__recipient=request.user)
@@ -393,7 +415,7 @@ def index_view(request):
 
 @login_required(login_url='login')
 def delete_blocked_site(request, site_id):
-    site = get_object_or_404(BlockedSite, id=site_id)
+    site = get_object_or_404(SiteRule, id=site_id, user=request.user, is_blocked=True)
     domain = site.domain
     site.delete()
     messages.success(request, f"'{domain}' taqiqlar ro'yxatidan olib tashlandi.")
@@ -419,7 +441,7 @@ def clear_app_warnings(request):
 
 @login_required(login_url='login')
 def delete_allowed_site(request, site_id):
-    site = get_object_or_404(AllowedSite, id=site_id)
+    site = get_object_or_404(SiteRule, id=site_id, user=request.user, is_blocked=False)
     domain = site.domain
     site.delete()
     messages.success(request, f"'{domain}' oq ro'yxatdan olib tashlandi.")
@@ -476,6 +498,16 @@ def download_agent_bat(request):
 
     powershell_setup = """
     $ErrorActionPreference = 'Stop'
+    if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        $setupScriptPath = Join-Path $env:TEMP ('MasofaAgentSetup_' + [guid]::NewGuid().ToString() + '.ps1')
+        [IO.File]::WriteAllText($setupScriptPath, $script, [Text.Encoding]::Unicode)
+        try {
+            $elevatedProcess = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File "' + $setupScriptPath + '"')
+            exit $elevatedProcess.ExitCode
+        } finally {
+            Remove-Item -LiteralPath $setupScriptPath -Force -ErrorAction SilentlyContinue
+        }
+    }
     try {
         $serverUrl = '__SERVER_URL__'
         $installDir = Join-Path $env:LOCALAPPDATA 'MasofaAgent'
@@ -549,15 +581,16 @@ def download_agent_bat(request):
 
         $quote = [string][char]34
         $arguments = $quote + $agentPath + $quote + ' ' + $quote + $env:COMPUTERNAME + $quote + ' --owner-id __ACCOUNT_ID__ --server-url ' + $quote + $serverUrl + $quote
-        $startup = [Environment]::GetFolderPath('Startup')
-        $shell = New-Object -ComObject WScript.Shell
-        $shortcut = $shell.CreateShortcut((Join-Path $startup 'Masofa Agent.lnk'))
-        $shortcut.TargetPath = $pythonw
-        $shortcut.Arguments = $arguments
-        $shortcut.WorkingDirectory = $installDir
-        $shortcut.Save()
-
-        Start-Process -FilePath $pythonw -ArgumentList $arguments -WorkingDirectory $installDir -WindowStyle Hidden
+        $userIdentity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $legacyShortcut = Join-Path ([Environment]::GetFolderPath('Startup')) 'Masofa Agent.lnk'
+        if (Test-Path $legacyShortcut) {
+            Remove-Item -LiteralPath $legacyShortcut -Force
+        }
+        $action = New-ScheduledTaskAction -Execute $pythonw -Argument $arguments -WorkingDirectory $installDir
+        $trigger = New-ScheduledTaskTrigger -AtLogOn -User $userIdentity
+        $principal = New-ScheduledTaskPrincipal -UserId $userIdentity -LogonType Interactive -RunLevel Highest
+        Register-ScheduledTask -TaskName 'Masofa Agent' -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
+        Start-ScheduledTask -TaskName 'Masofa Agent'
         Write-Host 'Masofa Agent o''rnatildi va ishga tushirildi.' -ForegroundColor Green
     } catch {
         Write-Host ('O''rnatishda xato: ' + $_.Exception.Message) -ForegroundColor Red
@@ -710,12 +743,36 @@ def ajax_send_command(request):
         computer_name = (request.POST.get("computer_name") or "").strip()
         if not command_text:
             return JsonResponse({"status": "error", "message": "Buyruq matni bo'sh bo'lishi mumkin emas."}, status=400)
-        
-        cmd = Command.objects.create(
-            user=request.user,
-            command_text=command_text,
-            computer_name=computer_name if computer_name else None
-        )
+
+        target_owner_id = (request.POST.get("computer_owner_id") or "").strip()
+        target_owner = request.user
+        if target_owner_id:
+            if len(target_owner_id) != 20 or not target_owner_id.isdigit() or not computer_name:
+                return JsonResponse({"status": "error", "message": "Kompyuter akkaunt IDsi yoki nomi noto'g'ri."}, status=400)
+            target_profile = UserProfile.objects.filter(account_id=target_owner_id).first()
+            if not target_profile:
+                return JsonResponse({"status": "error", "message": "Kompyuter egasi topilmadi."}, status=404)
+            target_owner = target_profile.user
+            if not Computer.objects.filter(owner=target_owner, name=computer_name).exists():
+                return JsonResponse({"status": "error", "message": "Tanlangan kompyuter egasiga tegishli emas."}, status=404)
+            if target_owner != request.user and not SharedAccount.objects.filter(
+                owner=target_owner,
+                recipient=request.user,
+            ).exists():
+                return JsonResponse({"status": "error", "message": "Bu kompyuterni boshqarish uchun ruxsat yo'q."}, status=403)
+
+        with transaction.atomic():
+            cmd = Command.objects.create(
+                user=request.user,
+                command_text=command_text,
+                computer_name=computer_name if computer_name else None,
+            )
+            if target_owner != request.user:
+                AgentCommandRoute.objects.create(
+                    command_id=cmd.pk,
+                    target_owner=target_owner,
+                    computer_name=computer_name,
+                )
         return JsonResponse({
             "status": "success",
             "command_id": cmd.id,
@@ -760,9 +817,24 @@ class GetCommandAPIView(APIView):
         if owner_id:
             profile = UserProfile.objects.filter(account_id=str(owner_id)).first()
             if profile:
-                queryset = queryset.filter(user=profile.user)
+                own_command_ids = Command.objects.filter(
+                    user=profile.user,
+                ).exclude(
+                    pk__in=AgentCommandRoute.objects.values('command_id'),
+                ).values('pk')
+                routed_command_ids = AgentCommandRoute.objects.filter(
+                    target_owner=profile.user,
+                )
+                if agent_id:
+                    routed_command_ids = routed_command_ids.filter(computer_name__iexact=agent_id)
+                queryset = queryset.filter(
+                    Q(pk__in=own_command_ids) |
+                    Q(pk__in=routed_command_ids.values('command_id'))
+                )
             elif str(owner_id).isdigit():
                 queryset = queryset.filter(user_id=owner_id)
+            else:
+                queryset = queryset.none()
 
         if agent_id:
             queryset = queryset.filter(
@@ -799,11 +871,14 @@ class CheckSiteAPIView(APIView):
         if not domain:
             return Response({"allowed": False, "blocked": False, "error": "Domain not provided"}, status=400)
 
-        blocked_sites = list(BlockedSite.objects.values_list('domain', flat=True))
+        owner_id = request.GET.get("owner_id")
+        profile = UserProfile.objects.filter(account_id=str(owner_id)).first() if owner_id else None
+        rules = SiteRule.objects.filter(user__in=shared_policy_user_ids(profile.user)) if profile else SiteRule.objects.none()
+        blocked_sites = list(rules.filter(is_blocked=True).values_list('domain', flat=True))
         if any(is_blocked_domain(domain, blocked_site) for blocked_site in blocked_sites):
             return Response({"allowed": False, "blocked": True, "message": f"{domain} taqiqlangan sayt."})
 
-        is_allowed = AllowedSite.objects.filter(domain__iexact=domain).exists()
+        is_allowed = rules.filter(is_blocked=False, domain__iexact=domain).exists()
         return Response({"allowed": is_allowed, "blocked": False, "message": "Saytga ruxsat berilgan." if is_allowed else "Sayt qoidaga muvofiq."})
 
     def post(self, request):
@@ -841,14 +916,18 @@ class WhitelistAPIView(APIView):
 
     def get(self, request):
         owner_id = request.GET.get("owner_id")
-        allowed = list(AllowedSite.objects.values_list('domain', flat=True))
-        blocked = list(BlockedSite.objects.values_list('domain', flat=True))
+        profile = UserProfile.objects.filter(account_id=str(owner_id)).first() if owner_id else None
+        rules = SiteRule.objects.filter(user__in=shared_policy_user_ids(profile.user)) if profile else SiteRule.objects.none()
+        allowed = list(rules.filter(is_blocked=False).values_list('domain', flat=True))
+        blocked = list(rules.filter(is_blocked=True).values_list('domain', flat=True))
         
         if owner_id:
             blocked_apps_qs = BlockedApp.objects.none()
             profile = UserProfile.objects.filter(account_id=str(owner_id)).first()
             if profile:
-                blocked_apps_qs = BlockedApp.objects.filter(user=profile.user)
+                blocked_apps_qs = BlockedApp.objects.filter(
+                    user__in=shared_policy_user_ids(profile.user),
+                )
             elif str(owner_id).isdigit():
                 blocked_apps_qs = BlockedApp.objects.filter(user_id=owner_id)
         else:
@@ -897,7 +976,7 @@ class AjaxBlockSiteView(APIView):
         if not domain:
             return Response({"status": "error", "message": "Domen kiritilmadi."}, status=400)
 
-        BlockedSite.objects.get_or_create(domain=domain)
+        SiteRule.objects.get_or_create(user=request.user, domain=domain, is_blocked=True)
         return Response({"status": "success", "message": f"{domain} taqiqlandi."})
 
 
