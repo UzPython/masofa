@@ -20,3 +20,5 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f'Admin account created: {username} / {password}'))
         else:
             self.stdout.write(self.style.WARNING(f'Admin account already exists: {username}'))
+
+# +998 91 153 33 34
