@@ -12,10 +12,13 @@
         body {
             font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
             transition: background-color 0.2s, color 0.2s;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
         }
         html.theme-dark body {
             background-color: #090d16 !important;
-            color: #e2e8f0 !important;
+            color: #f8fafc !important;
         }
         html.theme-dark header {
             background-color: #0f172a !important;
@@ -38,11 +41,11 @@
         html.theme-dark .text-slate-800,
         html.theme-dark .text-slate-700,
         html.theme-dark .text-slate-600 {
-            color: #e2e8f0 !important;
+            color: #f8fafc !important;
         }
         html.theme-dark .text-slate-500,
         html.theme-dark .text-slate-400 {
-            color: #94a3b8 !important;
+            color: #cbd5e1 !important;
         }
         html.theme-dark .border-slate-100,
         html.theme-dark .border-slate-200,
@@ -201,6 +204,23 @@
 
     <!-- Asosiy Konteyner -->
     <main class="max-w-7xl mx-auto px-4 py-6 flex-grow w-full space-y-6">
+
+        {% if warnings %}
+        <div class="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 flex items-center justify-between gap-3 text-rose-200 shadow-lg">
+            <div class="flex items-center gap-3">
+                <div class="h-10 w-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-lg shrink-0 animate-bounce">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <div>
+                    <p class="font-bold text-sm text-rose-200">Diqqat! Taqiqlangan saytga kirish urinishi aniqlandi va to'xtatildi!</p>
+                    <p class="text-xs text-rose-300">Kompyuter/ID: <span class="font-semibold underline">{{ warnings.0.computer_name }}</span> | Domen: <span class="font-mono text-white bg-rose-950 px-1.5 py-0.5 rounded">{{ warnings.0.domain }}</span></p>
+                </div>
+            </div>
+            <button type="button" onclick="switchTab('tab-security')" class="text-xs bg-rose-600 hover:bg-rose-700 text-white font-semibold px-4 py-2 rounded-xl transition shadow-sm shrink-0">
+                Jurnalni ko'rish
+            </button>
+        </div>
+        {% endif %}
 
         <!-- STATISTIKA KARTALARI (KPI CARDS) -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">

@@ -1,36 +1,34 @@
 import asyncio
 import argparse
-import http.client
-import websockets
-import pyautogui
-import io
-import os
-import sys
 import ctypes
+import http.client
+import io
 import json
+import os
 import subprocess
-from urllib.parse import urlencode, urlsplit, urlunsplit, quote
-import urllib.request
+import sys
 import urllib.error
+import urllib.request
+from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 
-# ─────────────────────────── SOZLAMALAR ───────────────────────────
+import pyautogui
+import websockets
+
+# ??????????????????????????? SOZLAMALAR ???????????????????????????
 SCREEN_QUALITY = 75
-FPS_DELAY = 0.016          # ~60 FPS
+FPS_DELAY = 0.016
 
-# Hosts fayl joylashuvi (Windows)
 HOSTS_FILE = r"C:\Windows\System32\drivers\etc\hosts"
 HOSTS_MARKER_BEGIN = "# === MASOFA WEB FILTER BEGIN ==="
-HOSTS_MARKER_END   = "# === MASOFA WEB FILTER END ==="
+HOSTS_MARKER_END = "# === MASOFA WEB FILTER END ==="
 
-# Whitelist yangilanish oralig'i (soniya)
 WHITELIST_POLL_INTERVAL = 30
 MAX_TRANSFER_BYTES = 4 * 1024 * 1024 * 1024
 FILE_TRANSFER_START = '__FILE_TRANSFER_START__'
 FILE_TRANSFER_END = '__FILE_TRANSFER_END__'
 
 
-# ──────────────────── YORDAMCHI FUNKSIYALAR ────────────────────────
-
+# ???????????????????? YORDAMCHI FUNKSIYALAR ????????????????????????
 def is_admin() -> bool:
     """Agentning administrator huquqida ishlayotganini tekshirish."""
     try:
@@ -48,7 +46,17 @@ def get_http_base_url(server_url: str) -> str:
     return f"{scheme}://{parts.netloc}"
 
 
-def build_ws_url(agent_id: str, server_url=None, owner_id=None, username=None, password=None) -> str:
+def normalize_domain_name(domain: str) -> str:
+    if domain is None:
+        return ''
+    value = str(domain).strip().lower().replace('https://', '').replace('http://', '')
+    value = value.split('/', 1)[0].split('?', 1)[0].split('#', 1)[0].strip('.')
+    if value.startswith('www.'):
+        value = value[4:]
+    return value
+
+
+def build_ws_url(agent_id: str, server_url=None, owner_id=None, username=None, password=None):
     server_url = server_url or os.environ.get('SCREEN_SERVER_URL') or 'http://127.0.0.1:8000'
     if '://' not in server_url:
         server_url = f'http://{server_url}'
@@ -69,15 +77,14 @@ def build_ws_url(agent_id: str, server_url=None, owner_id=None, username=None, p
     return urlunsplit((scheme, parts.netloc, path, urlencode(query), ''))
 
 
-# ──────────────────── HOSTS FAYL BOSHQARUVI ───────────────────────
-
+# ???????????????????? HOSTS FAYL BOSHQARUVI ???????????????????????
 def read_hosts() -> str:
     try:
         with open(HOSTS_FILE, 'r', encoding='utf-8', errors='replace') as f:
             return f.read()
     except Exception as e:
         print(f"[!] [FILTR] Hosts faylni o'qib bo'lmadi: {e}")
-        return ""
+        return ''
 
 
 def write_hosts(content: str) -> bool:
@@ -110,44 +117,120 @@ def strip_masofa_block(hosts_content: str) -> str:
     return ''.join(result)
 
 
+def flush_dns_cache():
+    try:
+        subprocess.run("ipconfig /flushdns", shell=True, capture_output=True, timeout=5)
+        print("[+] [FILTR] DNS kesh tozalandi.")
+    except Exception as e:
+        print(f"[-] [FILTR] DNS keshni tozalashda xatolik: {e}")
+
+
 def apply_web_filter(allowed_domains: list, blocked_domains: list, computer_name: str, base_url: str):
     """
-    Ruxsat etilgan va taqiqlangan domenlar asosida
-    hosts faylini yangilash.
+    Ruxsat etilgan va taqiqlangan domenlar asosida hosts faylini va firewall qoidalarini yangilash.
     """
     if not is_admin():
-        print("[!] [FILTR] Administrator huquqisiz hosts faylini o'zgartirish mumkin emas.")
+        print("[!] [FILTR] Administrator huquqisiz hosts va firewall o'zgartirilmaydi.")
         return
 
+    normalized_allowed = [normalize_domain_name(domain) for domain in (allowed_domains or []) if normalize_domain_name(domain)]
+    normalized_blocked = [normalize_domain_name(domain) for domain in (blocked_domains or []) if normalize_domain_name(domain)]
     current = read_hosts()
     clean = strip_masofa_block(current)
 
-    # Taqiqlanganlar ro'yxatini shakllantiramiz
     block_lines = [HOSTS_MARKER_BEGIN]
-    
-    # 1. Serverdan kelgan qora ro'yxatni qo'shamiz
-    for domain in blocked_domains:
-        # Agar bu domen oq ro'yxatda bo'lmasa, uni bloklaymiz
-        if domain.lower().strip() not in [d.lower().strip() for d in allowed_domains]:
+    for domain in sorted(set(normalized_blocked)):
+        if domain.lower().strip() not in {d.lower().strip() for d in normalized_allowed}:
             block_lines.append(f"127.0.0.1  {domain}")
             block_lines.append(f"127.0.0.1  www.{domain}")
 
     block_lines.append(HOSTS_MARKER_END)
     block_section = '\n'.join(block_lines) + '\n'
-
     new_content = clean.rstrip('\n') + '\n\n' + block_section
 
     if new_content != current:
         if write_hosts(new_content):
-            print(f"[+] [FILTR] Hosts fayli yangilandi: {len(blocked_domains)} ta domen taqiqlandi.")
+            print(f"[+] [FILTR] Hosts fayli yangilandi: {len(normalized_blocked)} ta domen taqiqlandi.")
+            flush_dns_cache()
+            try:
+                for domain in normalized_blocked:
+                    subprocess.run(f'netsh advfirewall firewall add rule name="MasofaBlock_{domain}" dir=out action=block remoteip=any', shell=True, capture_output=True)
+            except Exception:
+                pass
         else:
             print("[-] [FILTR] Hosts faylini yangilab bo'lmadi.")
     else:
         print(f"[=] [FILTR] Hosts fayli o'zgarmadi.")
 
 
-# ──────────────────── ASOSIY ASYNC VAZIFALAR ──────────────────────
+async def monitor_blocked_access(agent_id: str, server_url=None, owner_id=None):
+    """Taqiqlangan saytlarga kirish urinishlarini faol kuzatish, brauzerni yopish va serverga xabar berish."""
+    base_url = get_http_base_url(server_url)
+    api_url = f"{base_url}/api/whitelist/"
+    check_site_url = f"{base_url}/api/check-site/"
 
+    while True:
+        try:
+            def check_active_window():
+                if os.name != 'nt':
+                    return ""
+                try:
+                    import ctypes
+                    buf = ctypes.create_unicode_buffer(512)
+                    hwnd = ctypes.windll.user32.GetForegroundWindow()
+                    ctypes.windll.user32.GetWindowTextW(hwnd, buf, 512)
+                    return buf.value.lower()
+                except Exception:
+                    return ""
+
+            title = await asyncio.to_thread(check_active_window)
+            if title:
+                def get_blocked():
+                    req = urllib.request.Request(api_url, headers={'User-Agent': 'MasofaAgent/3.0'})
+                    with urllib.request.urlopen(req, timeout=5) as resp:
+                        if resp.status == 200:
+                            return json.loads(resp.read().decode('utf-8')).get('blocked_domains', [])
+                    return []
+
+                blocked_domains = await asyncio.to_thread(get_blocked)
+                for domain in blocked_domains:
+                    norm_domain = normalize_domain_name(domain)
+                    base_name = norm_domain.split('.')[0] if '.' in norm_domain else norm_domain
+                    if norm_domain and (norm_domain in title or (len(base_name) > 3 and base_name in title)):
+                        def post_warning():
+                            payload = {
+                                "computer_name": agent_id,
+                                "url": f"https://{domain} (Faol oyna: {title})",
+                                "domain": domain
+                            }
+                            if owner_id:
+                                payload["owner_id"] = owner_id
+                            data = json.dumps(payload).encode('utf-8')
+                            req = urllib.request.Request(
+                                check_site_url,
+                                data=data,
+                                headers={'Content-Type': 'application/json', 'User-Agent': 'MasofaAgent/3.0'}
+                            )
+                            with urllib.request.urlopen(req, timeout=5):
+                                pass
+                        await asyncio.to_thread(post_warning)
+                        print(f"[!] [FILTR] Taqiqlangan saytga urinish aniqlandi va yopildi: {domain}")
+
+                        def kill_browsers():
+                            try:
+                                subprocess.run("taskkill /f /im chrome.exe", shell=True, capture_output=True)
+                                subprocess.run("taskkill /f /im msedge.exe", shell=True, capture_output=True)
+                                subprocess.run("taskkill /f /im firefox.exe", shell=True, capture_output=True)
+                            except Exception:
+                                pass
+                        await asyncio.to_thread(kill_browsers)
+                        break
+        except Exception:
+            pass
+        await asyncio.sleep(2)
+
+
+# ???????????????????? ASOSIY ASYNC VAZIFALAR ??????????????????????
 async def send_screen(agent_id: str, server_url=None, owner_id=None):
     """Ekran tasvirini real vaqtda serverga uzatish (avtomatik qayta ulanish bilan)."""
     websocket_url = build_ws_url(agent_id, server_url, owner_id=owner_id)
@@ -211,31 +294,21 @@ def execute_system_command(command_text: str) -> str:
         if (folder_path.startswith('"') and folder_path.endswith('"')) or (folder_path.startswith("'") and folder_path.endswith("'")):
             folder_path = folder_path[1:-1].strip()
         try:
+            zip_filename = os.path.basename(folder_path) or 'backup'
+            zip_path = os.path.join(os.environ.get('TEMP', os.path.dirname(__file__) or '.'), f'{zip_filename}.zip')
             import zipfile
-            import tempfile
-            
-            base_name = os.path.basename(folder_path.rstrip('\\/')) or 'folder'
-            zip_filename = f"{base_name}_masofa.zip"
-            zip_path = os.path.join(tempfile.gettempdir(), zip_filename)
-            
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zipf:
                 for root, dirs, files in os.walk(folder_path):
-                    for file in files:
-                        file_path = os.path.join(root, file)
+                    for file_name in files:
+                        full_path = os.path.join(root, file_name)
                         try:
-                            arcname = os.path.relpath(file_path, folder_path)
-                            zipf.write(file_path, arcname)
+                            zipf.write(full_path, os.path.relpath(full_path, folder_path))
                         except Exception:
                             pass
-
             if os.path.getsize(zip_path) > MAX_TRANSFER_BYTES:
-                try:
-                    os.remove(zip_path)
-                except OSError:
-                    pass
+                os.remove(zip_path)
                 raise ValueError('ZIP fayl hajmi 4 GiB limitidan oshdi.')
-            
-            return FILE_TRANSFER_START + json.dumps({'path': zip_path, 'filename': zip_filename}, ensure_ascii=False) + FILE_TRANSFER_END
+            return FILE_TRANSFER_START + json.dumps({'path': zip_path, 'filename': zip_filename + '.zip'}, ensure_ascii=False) + FILE_TRANSFER_END
         except Exception as e:
             return '__FILE_JSON_START__' + json.dumps({'status': 'error', 'message': str(e)}, ensure_ascii=False) + '__FILE_JSON_END__'
 
@@ -260,22 +333,17 @@ def execute_system_command(command_text: str) -> str:
         try:
             import time
             items = []
-            for e in os.scandir(path):
+            for entry in os.scandir(path):
                 try:
-                    st = e.stat()
+                    stat = entry.stat()
                     items.append({
-                        'name': e.name,
-                        'is_dir': e.is_dir(),
-                        'size': 0 if e.is_dir() else st.st_size,
-                        'mtime': time.strftime('%Y-%m-%d %H:%M', time.localtime(st.st_mtime))
+                        'name': entry.name,
+                        'is_dir': entry.is_dir(),
+                        'size': 0 if entry.is_dir() else stat.st_size,
+                        'mtime': time.strftime('%Y-%m-%d %H:%M', time.localtime(stat.st_mtime))
                     })
-                except:
-                    items.append({
-                        'name': e.name,
-                        'is_dir': e.is_dir(),
-                        'size': 0,
-                        'mtime': ''
-                    })
+                except Exception:
+                    items.append({'name': entry.name, 'is_dir': entry.is_dir(), 'size': 0, 'mtime': ''})
             return '__JSON_START__' + json.dumps({'status': 'ok', 'path': path, 'items': items}, ensure_ascii=False) + '__JSON_END__'
         except Exception as e:
             return '__JSON_START__' + json.dumps({'status': 'error', 'message': str(e)}, ensure_ascii=False) + '__JSON_END__'
@@ -291,14 +359,14 @@ def execute_system_command(command_text: str) -> str:
             encoding=encoding,
             errors='replace'
         )
-        output = result.stdout or ""
+        output = result.stdout or ''
         if result.stderr:
-            output += ("\n" if output else "") + "[XATO]:\n" + result.stderr
+            output += ('\n' if output else '') + '[XATO]:\n' + result.stderr
         if not output.strip():
-            output = "[OK] Buyruq muvaffaqiyatli bajarildi (hech qanday chiqish yo'q)."
+            output = '[OK] Buyruq muvaffaqiyatli bajarildi (hech qanday chiqish yo\'q).'
         return output
     except subprocess.TimeoutExpired:
-        return "[XATO]: Buyruqni bajarish vaqti tugadi (25 soniya limiti)."
+        return '[XATO]: Buyruqni bajarish vaqti tugadi (25 soniya limiti).'
     except Exception as e:
         return f"[XATO]: Buyruqni bajarib bo'lmadi: {str(e)}"
 
@@ -323,9 +391,9 @@ async def poll_commands(agent_id: str, server_url=None, owner_id=None):
 
             data = await asyncio.to_thread(get_command)
 
-            if data and data.get("id") and data.get("command_text"):
-                cmd_id = data["id"]
-                cmd_text = data["command_text"]
+            if data and data.get('id') and data.get('command_text'):
+                cmd_id = data['id']
+                cmd_text = data['command_text']
                 print(f"[+] [BUYRUQ] Yangi buyruq (ID: {cmd_id}): '{cmd_text}'")
 
                 output = await asyncio.to_thread(execute_system_command, cmd_text)
@@ -336,19 +404,11 @@ async def poll_commands(agent_id: str, server_url=None, owner_id=None):
                         transfer_json = output[len(FILE_TRANSFER_START):output.index(FILE_TRANSFER_END)]
                         transfer = json.loads(transfer_json)
                         transfer_path = transfer['path']
-                        await asyncio.to_thread(
-                            upload_transfer_file,
-                            base_url,
-                            cmd_id,
-                            transfer_path,
-                            transfer['filename'],
-                        )
+                        await asyncio.to_thread(upload_transfer_file, base_url, cmd_id, transfer_path, transfer['filename'])
                         transfer_succeeded = True
                         print(f"[+] [BUYRUQ] ID: {cmd_id} fayli oqimli uzatildi.")
                     except Exception as e:
-                        output = '__FILE_JSON_START__' + json.dumps(
-                            {'status': 'error', 'message': str(e)}, ensure_ascii=False
-                        ) + '__FILE_JSON_END__'
+                        output = '__FILE_JSON_START__' + json.dumps({'status': 'error', 'message': str(e)}, ensure_ascii=False) + '__FILE_JSON_END__'
                     finally:
                         if transfer_path:
                             try:
@@ -358,7 +418,7 @@ async def poll_commands(agent_id: str, server_url=None, owner_id=None):
 
                 if not transfer_succeeded:
                     def post_result():
-                        post_data = json.dumps({"command_id": cmd_id, "output": output}).encode('utf-8')
+                        post_data = json.dumps({'command_id': cmd_id, 'output': output}).encode('utf-8')
                         post_req = urllib.request.Request(
                             f"{base_url}/api/command/",
                             data=post_data,
@@ -369,7 +429,6 @@ async def poll_commands(agent_id: str, server_url=None, owner_id=None):
 
                     await asyncio.to_thread(post_result)
                     print(f"[+] [BUYRUQ] ID: {cmd_id} natijasi yuborildi.")
-
         except urllib.error.URLError:
             pass
         except Exception:
@@ -386,7 +445,7 @@ async def poll_whitelist(agent_id: str, server_url=None):
     base_url = get_http_base_url(server_url)
     api_url = f"{base_url}/api/whitelist/"
 
-    admin_status = "✔ Administrator" if is_admin() else "✘ Administrator emas (hosts fayl o'zgartirilmaydi)"
+    admin_status = '? Administrator' if is_admin() else '? Administrator emas (hosts fayl o\'zgartirilmaydi)'
     print(f"[*] [FILTR] Veb filtr vazifasi faollashdi. Holat: {admin_status}")
     print(f"[*] [FILTR] Whitelist manzili: {api_url}")
 
@@ -404,20 +463,15 @@ async def poll_whitelist(agent_id: str, server_url=None):
 
             data = await asyncio.to_thread(fetch_whitelist)
 
-            if data and isinstance(data.get("allowed_domains"), list):
-                new_allowed = sorted(data["allowed_domains"])
-                # Serverdan taqiqlanganlar ro'yxatini ham so'raymiz (agar API qo'shilgan bo'lsa)
-                # Hozircha biz view.py da faqat allowed_domains qaytarganmiz, 
-                # lekin bizga blocked_domains ham kerak.
-                # Agar serverda blocked_domains bo'lmasa, bo'sh list olamiz.
-                new_blocked = sorted(data.get("blocked_domains", []))
+            if data and isinstance(data.get('allowed_domains'), list):
+                new_allowed = sorted({normalize_domain_name(domain) for domain in data['allowed_domains'] if normalize_domain_name(domain)})
+                new_blocked = sorted({normalize_domain_name(domain) for domain in data.get('blocked_domains', []) if normalize_domain_name(domain)})
 
                 if new_allowed != last_allowed or new_blocked != last_blocked:
                     print(f"[+] [FILTR] Filtrlarni yangilash: {len(new_allowed)} ruxsat, {len(new_blocked)} taqiq.")
                     await asyncio.to_thread(apply_web_filter, new_allowed, new_blocked, agent_id, base_url)
                     last_allowed = new_allowed
                     last_blocked = new_blocked
-
         except urllib.error.URLError:
             pass
         except Exception as e:
@@ -427,32 +481,30 @@ async def poll_whitelist(agent_id: str, server_url=None):
 
 
 async def main(agent_id: str, server_url=None, owner_id=None):
-    print("=" * 60)
-    print(f"   MASOFA AGENT v3.0 — ISHGA TUSHDI")
-    print(f"   Kompyuter nomi : {agent_id}")
-    print(f"   Akkaunt ID     : {owner_id or 'Umumiy'}")
-    print(f"   Server         : {get_http_base_url(server_url)}")
-    print(f"   Admin huquqi   : {'HA ✔' if is_admin() else 'YOQ (Veb filtr ishlamaydi!)'}")
-    print("=" * 60)
+    print('=' * 60)
+    print(f'   MASOFA AGENT v3.0 ? ISHGA TUSHDI')
+    print(f'   Kompyuter nomi : {agent_id}')
+    print(f'   Akkaunt ID     : {owner_id or "Umumiy"}')
+    print(f'   Server         : {get_http_base_url(server_url)}')
+    print(f'   Admin huquqi   : {"HA ?" if is_admin() else "YOQ (Veb filtr ishlamaydi!)"}')
+    print('=' * 60)
 
     if not is_admin():
         print()
-        print("  [DIQQAT] Administrator huquqisiz veb filtr ishlamaydi.")
-        print("  Veb filtr uchun agentni administrator sifatida ishga tushiring.")
+        print('  [DIQQAT] Administrator huquqisiz veb filtr ishlamaydi.')
+        print('  Veb filtr uchun agentni administrator sifatida ishga tushiring.')
         print()
 
-    # Uchta vazifani bir vaqtda (parallel) ishga tushirish
     await asyncio.gather(
         send_screen(agent_id, server_url, owner_id),
         poll_commands(agent_id, server_url, owner_id),
         poll_whitelist(agent_id, server_url),
+        monitor_blocked_access(agent_id, server_url, owner_id),
     )
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description='Masofa Agent — ekran uzatish, terminal va veb filtr.'
-    )
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Masofa Agent ? ekran uzatish, terminal va veb filtr.')
     parser.add_argument('agent_id', nargs='?', default=os.environ.get('COMPUTERNAME') or 'PC-01', help='Paneldagi kompyuter nomi, masalan: PC-01')
     parser.add_argument('--owner-id', type=str, help='Eganing 20 xonali akkaunt IDsi')
     parser.add_argument('--server-url', help='Server manzili (masalan: http://127.0.0.1:8000)')
@@ -461,5 +513,5 @@ if __name__ == "__main__":
     try:
         asyncio.run(main(arguments.agent_id, arguments.server_url, arguments.owner_id))
     except KeyboardInterrupt:
-        print("\n[!] Agent foydalanuvchi tomonidan to'xtatildi.")
+        print('\n[!] Agent foydalanuvchi tomonidan to\'xtatildi.')
         sys.exit(0)

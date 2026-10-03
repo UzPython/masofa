@@ -25,6 +25,26 @@ TRANSFER_MARKER = '__TRANSFER_FILE__:'
 TRANSFER_DIR = Path(tempfile.gettempdir()) / 'masofa-transfers'
 
 
+def normalize_domain(value):
+    if value is None:
+        return ''
+    value = str(value).strip().lower()
+    value = value.replace('https://', '').replace('http://', '')
+    value = value.split('/', 1)[0].split('?', 1)[0].split('#', 1)[0]
+    value = value.strip().strip('.')
+    if value.startswith('www.'):
+        value = value[4:]
+    return value
+
+
+def is_blocked_domain(candidate, blocked_domain):
+    candidate = normalize_domain(candidate)
+    blocked_domain = normalize_domain(blocked_domain)
+    if not candidate or not blocked_domain:
+        return False
+    return candidate == blocked_domain or candidate.endswith(f'.{blocked_domain}')
+
+
 class TransferFileResponse(FileResponse):
     def __init__(self, *args, transfer_path, **kwargs):
         self.transfer_path = Path(transfer_path)
@@ -211,15 +231,13 @@ def index_view(request):
                 )
                 messages.success(request, 'Buyruq kompyuterga yuborildi.')
         elif form_type == "allowed_site":
-            domain = request.POST.get("domain")
+            domain = normalize_domain(request.POST.get("domain"))
             if domain:
-                domain = domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
                 AllowedSite.objects.get_or_create(domain=domain)
                 messages.success(request, f'{domain} oq ro\'yxatga qo\'shildi.')
         elif form_type == "blocked_site":
-            domain = request.POST.get("domain")
+            domain = normalize_domain(request.POST.get("domain"))
             if domain:
-                domain = domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
                 BlockedSite.objects.get_or_create(domain=domain)
                 messages.success(request, f'{domain} qora ro\'yxatga (taqiqlandi) qo\'shildi.')
         elif form_type == "computer":
@@ -279,7 +297,9 @@ def index_view(request):
     commands = Command.objects.filter(user=request.user).order_by('-created_at')
     allowed_sites = AllowedSite.objects.all().order_by('-created_at')
     blocked_sites = BlockedSite.objects.all().order_by('-created_at')
-    warnings = SiteWarning.objects.all().order_by('-timestamp')
+    warnings = SiteWarning.objects.filter(
+        Q(user=request.user) | Q(user__incoming_shares__recipient=request.user)
+    ).distinct().order_by('-timestamp')
     computers = Computer.objects.filter(
         Q(owner=request.user) | Q(shared_with=request.user)
     ).distinct().order_by('name')
@@ -313,6 +333,8 @@ def index_view(request):
     selected_computer = computers.first()
     own_computers = Computer.objects.filter(owner=request.user).order_by('name')
     user_profile = UserProfile.objects.filter(user=request.user).first()
+    if not user_profile:
+        user_profile = UserProfile.create_for_user(request.user)
 
     total_computers = computers.count()
     online_computers = sum(1 for c in computers if c.is_online)
@@ -653,30 +675,43 @@ class CheckSiteAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        domain = request.GET.get("domain")
+        domain = normalize_domain(request.GET.get("domain"))
         if not domain:
-            return Response({"allowed": False, "error": "Domain not provided"}, status=400)
-        
-        # Birinchi navbatda taqiqlanganmi yoki yo'qligini tekshiramiz
-        if BlockedSite.objects.filter(domain__iexact=domain).exists():
-            return Response({"allowed": False, "blocked": True})
-            
+            return Response({"allowed": False, "blocked": False, "error": "Domain not provided"}, status=400)
+
+        blocked_sites = list(BlockedSite.objects.values_list('domain', flat=True))
+        if any(is_blocked_domain(domain, blocked_site) for blocked_site in blocked_sites):
+            return Response({"allowed": False, "blocked": True, "message": f"{domain} taqiqlangan sayt."})
+
         is_allowed = AllowedSite.objects.filter(domain__iexact=domain).exists()
-        return Response({"allowed": is_allowed, "blocked": False})
+        return Response({"allowed": is_allowed, "blocked": False, "message": "Saytga ruxsat berilgan." if is_allowed else "Sayt qoidaga muvofiq."})
 
     def post(self, request):
         computer_name = request.data.get("computer_name", "Noma'lum kompyuter")
+        owner_id = request.data.get("owner_id")
         url = request.data.get("url")
-        domain = request.data.get("domain")
+        domain = normalize_domain(request.data.get("domain") or url)
 
-        if url and domain:
+        if not domain:
+            return Response({"status": "invalid data"}, status=400)
+
+        target_user = None
+        display_name = computer_name
+        if owner_id:
+            profile = UserProfile.objects.filter(account_id=str(owner_id)).first()
+            if profile:
+                target_user = profile.user
+                display_name = profile.user.username
+
+        if url:
             SiteWarning.objects.create(
-                computer_name=computer_name,
+                user=target_user,
+                computer_name=display_name,
                 url=url,
-                domain=domain
+                domain=domain,
             )
             return Response({"status": "warning recorded"}, status=201)
-        
+
         return Response({"status": "invalid data"}, status=400)
 
 
@@ -700,11 +735,10 @@ class AjaxBlockSiteView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        domain = request.data.get("domain")
+        domain = normalize_domain(request.data.get("domain"))
         if not domain:
             return Response({"status": "error", "message": "Domen kiritilmadi."}, status=400)
-        
-        domain = domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
+
         BlockedSite.objects.get_or_create(domain=domain)
         return Response({"status": "success", "message": f"{domain} taqiqlandi."})
 

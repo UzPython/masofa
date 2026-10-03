@@ -80,7 +80,8 @@ class BlockedSite(models.Model):
 
 
 class SiteWarning(models.Model):
-    computer_name = models.CharField(max_length=255, default="Noma'lum kompyuter", help_text="Kompyuter nomi yoki egasi")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='site_warnings')
+    computer_name = models.CharField(max_length=255, default="Noma'lum kompyuter", help_text="Foydalanuvchi nomi")
     url = models.TextField(help_text="Foydalanuvchi kirmoqchi bo'lgan to'liq havola")
     domain = models.CharField(max_length=255, help_text="Sayt domeni (masalan: instagram.com)")
     timestamp = models.DateTimeField(auto_now_add=True, help_text="Urinish vaqti")
