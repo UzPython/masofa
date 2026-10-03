@@ -1,3 +1,4 @@
+import base64
 import csv
 import json
 import os
@@ -472,46 +473,123 @@ def download_agent_bat(request):
     scheme = "https" if request.is_secure() else "http"
     server_url = f"{scheme}://{host}"
     safe_server_url = server_url.replace("'", "''")
-    powershell_setup = f"""
-$ErrorActionPreference = 'Stop'
-$installDir = Join-Path $env:LOCALAPPDATA 'MasofaAgent'
-New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-$python = (Get-Command python.exe -ErrorAction Stop).Source
-& $python -m pip install websockets pyautogui pillow
-if ($LASTEXITCODE -ne 0) {{ throw 'Agent dependencies failed to install.' }}
-$pythonw = Join-Path (Split-Path $python) 'pythonw.exe'
-if (-not (Test-Path $pythonw)) {{ throw 'pythonw.exe was not found.' }}
-$agentPath = Join-Path $installDir 'agent.py'
-Invoke-WebRequest -UseBasicParsing -Uri '{safe_server_url}/agent/script/' -OutFile $agentPath
-$serverUrl = '{safe_server_url}'
-$arguments = '"' + $agentPath + '" "' + $env:COMPUTERNAME + '" --owner-id {account_id} --server-url "' + $serverUrl + '"'
-$startup = [Environment]::GetFolderPath('Startup')
-$shell = New-Object -ComObject WScript.Shell
-$shortcut = $shell.CreateShortcut((Join-Path $startup 'Masofa Agent.lnk'))
-$shortcut.TargetPath = $pythonw
-$shortcut.Arguments = $arguments
-$shortcut.WorkingDirectory = $installDir
-$shortcut.Save()
-Start-Process -FilePath $pythonw -ArgumentList $arguments -WorkingDirectory $installDir -WindowStyle Hidden
-Write-Output 'Agent is running in the background and starts when Windows signs in.'
-"""
-    import base64
+
+    powershell_setup = """
+    $ErrorActionPreference = 'Stop'
+    try {
+        $serverUrl = '__SERVER_URL__'
+        $installDir = Join-Path $env:LOCALAPPDATA 'MasofaAgent'
+        New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+
+        $launcher = $null
+        $launcherArgs = @()
+        $pythonVersion = $null
+        $pyLauncher = Get-Command py.exe -ErrorAction SilentlyContinue
+        if ($pyLauncher) {
+            $launcher = $pyLauncher.Source
+            $version = '3.14'
+            & $launcher "-$version" -c 'import sys; print(sys.version_info[:2])' 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                $launcherArgs = @("-$version")
+                $pythonVersion = $version
+            }
+        } else {
+            foreach ($name in @('python.exe', 'python3.exe')) {
+                $candidate = Get-Command $name -ErrorAction SilentlyContinue
+                if ($candidate -and $candidate.Source -notlike '*WindowsApps*') {
+                    $candidateVersion = & $candidate.Source -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>$null
+                    if ($LASTEXITCODE -eq 0 -and $candidateVersion -eq '3.14') {
+                        $launcher = $candidate.Source
+                        $pythonVersion = $candidateVersion.Trim()
+                        break
+                    }
+                }
+            }
+        }
+        if (-not $launcher -or -not $pythonVersion) {
+            throw 'Python 3.14 topilmadi. Python 3.14 o''rnating.'
+        }
+        $pythonProbe = & $launcher @launcherArgs -c 'import sys; print(sys.executable)' 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $pythonProbe) {
+            throw 'Topilgan Python ishga tushmadi. Python''ni qayta o''rnating.'
+        }
+
+        $agentPath = Join-Path $installDir 'agent.py'
+        $oldAgents = @(Get-CimInstance Win32_Process | Where-Object {
+            $_.Name -in @('python.exe', 'pythonw.exe') -and
+            $_.CommandLine -and
+            $_.CommandLine.IndexOf($agentPath, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        })
+        foreach ($oldAgent in $oldAgents) {
+            Stop-Process -Id $oldAgent.ProcessId -Force -ErrorAction Stop
+        }
+
+        $venvDir = Join-Path $installDir '.venv-py314'
+        & $launcher @launcherArgs -m venv $venvDir
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Python virtual muhitini yaratib bo''lmadi.'
+        }
+        $agentPython = Join-Path $venvDir 'Scripts\\python.exe'
+        $pythonw = Join-Path $venvDir 'Scripts\\pythonw.exe'
+
+        & $agentPython -m pip install --upgrade pip websockets pyautogui pillow
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Kutubxonalarni o''rnatib bo''lmadi.'
+        }
+
+        & $agentPython -c 'import pyautogui; print(pyautogui.screenshot().size)'
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Ekran tasvirini olish sinovi bajarilmadi. Xatoni tekshiring.'
+        }
+
+        Invoke-WebRequest -UseBasicParsing -Uri ($serverUrl + '/agent/script/') -OutFile $agentPath
+        if (-not (Test-Path $agentPath) -or (Get-Item $agentPath).Length -eq 0) {
+            throw 'Agent fayli serverdan yuklanmadi.'
+        }
+
+        $quote = [string][char]34
+        $arguments = $quote + $agentPath + $quote + ' ' + $quote + $env:COMPUTERNAME + $quote + ' --owner-id __ACCOUNT_ID__ --server-url ' + $quote + $serverUrl + $quote
+        $startup = [Environment]::GetFolderPath('Startup')
+        $shell = New-Object -ComObject WScript.Shell
+        $shortcut = $shell.CreateShortcut((Join-Path $startup 'Masofa Agent.lnk'))
+        $shortcut.TargetPath = $pythonw
+        $shortcut.Arguments = $arguments
+        $shortcut.WorkingDirectory = $installDir
+        $shortcut.Save()
+
+        Start-Process -FilePath $pythonw -ArgumentList $arguments -WorkingDirectory $installDir -WindowStyle Hidden
+        Write-Host 'Masofa Agent o''rnatildi va ishga tushirildi.' -ForegroundColor Green
+    } catch {
+        Write-Host ('O''rnatishda xato: ' + $_.Exception.Message) -ForegroundColor Red
+        exit 1
+    }
+""".replace('__SERVER_URL__', safe_server_url).replace('__ACCOUNT_ID__', str(account_id))
     encoded_setup = base64.b64encode(powershell_setup.encode('utf-16le')).decode('ascii')
+    encoded_setup_lines = '\n'.join(
+        f'{" >" if index == 0 else " >>"} "%PS_ENCODED_FILE%" echo {encoded_setup[offset:offset + 160]}'.lstrip()
+        for index, offset in enumerate(range(0, len(encoded_setup), 160))
+    )
     bat_content = f"""@echo off
+setlocal DisableDelayedExpansion
 chcp 65001 >nul
-title Masofa Agent sozlamasi
-powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand {encoded_setup}
-if errorlevel 1 (
-    echo Agentni sozlashda xatolik yuz berdi.
+title Masofa Agent O'rnatish
+set "PS_ENCODED_FILE=%TEMP%\\MasofaAgentSetup_%RANDOM%_%RANDOM%.b64"
+{encoded_setup_lines}
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$encoded = [IO.File]::ReadAllText($env:PS_ENCODED_FILE); $script = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($encoded)); & ([scriptblock]::Create($script))"
+set "INSTALL_ERROR=%ERRORLEVEL%"
+del /q "%PS_ENCODED_FILE%" >nul 2>&1
+if not "%INSTALL_ERROR%"=="0" (
+    echo.
+    echo O'rnatishda xato yuz berdi. Yuqoridagi xabarni tekshiring.
     pause
     exit /b 1
 )
 echo.
-echo Endi Chrome brauzerini yopishingiz mumkin. Agent fonda davom etadi.
+echo Agent o'rnatildi. Agent logi: %LOCALAPPDATA%\\MasofaAgent\\agent.log
 pause
 """
     response = HttpResponse(bat_content, content_type='application/x-bat')
-    response['Content-Disposition'] = 'attachment; filename="Masofa_Agent_Setup.bat"'
+    response['Content-Disposition'] = 'attachment; filename="masofa_212.bat"'
     return response
 
 

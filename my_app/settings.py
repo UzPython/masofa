@@ -26,6 +26,7 @@ SECRET_KEY = 'django-insecure-(=7=c1#j&fcy$1mjp)a=at^hf68cej!n00h^8#ajexi3_qlelg
 DEBUG = True
 
 ALLOWED_HOSTS = ["*"]
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 DATA_UPLOAD_MAX_MEMORY_SIZE = 64 * 1024 * 1024
 
@@ -80,10 +81,12 @@ WSGI_APPLICATION = 'my_app.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
+import tempfile
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': Path(tempfile.gettempdir()) / 'db.sqlite3',
     }
 }
 

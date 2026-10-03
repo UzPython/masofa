@@ -7,9 +7,32 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 from urllib.parse import quote, urlencode, urlsplit, urlunsplit
+
+
+def configure_agent_logging():
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+
+    log_dir = os.path.join(
+        os.environ.get('LOCALAPPDATA') or tempfile.gettempdir(),
+        'MasofaAgent',
+    )
+    os.makedirs(log_dir, exist_ok=True)
+    log_stream = open(
+        os.path.join(log_dir, 'agent.log'),
+        'a',
+        encoding='utf-8',
+        buffering=1,
+    )
+    sys.stdout = log_stream
+    sys.stderr = log_stream
+
+
+configure_agent_logging()
 
 import pyautogui
 import websockets
@@ -496,10 +519,10 @@ async def poll_commands(agent_id: str, server_url=None, owner_id=None):
 
                     await asyncio.to_thread(post_result)
                     print(f"[+] [BUYRUQ] ID: {cmd_id} natijasi yuborildi.")
-        except urllib.error.URLError:
-            pass
-        except Exception:
-            pass
+        except urllib.error.URLError as error:
+            print(f"[!] [BUYRUQ] Serverga ulanish xatosi: {error}")
+        except Exception as error:
+            print(f"[!] [BUYRUQ] Buyruqlarni tekshirishda xatolik: {error}")
 
         await asyncio.sleep(1.5)
 

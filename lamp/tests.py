@@ -70,15 +70,42 @@ class AgentSetupTests(TestCase):
         self.client.force_login(self.user)
 
     def test_setup_installer_registers_hidden_agent_for_windows_startup(self):
-        response = self.client.get(reverse('download_agent_bat'))
+        response = self.client.get(
+            reverse('download_agent_bat'),
+            HTTP_X_FORWARDED_PROTO='https',
+        )
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn('Masofa_Agent_Setup.bat', response['Content-Disposition'])
-        encoded_script = response.content.decode().split('-EncodedCommand ', 1)[1].splitlines()[0]
+        self.assertIn('masofa_212.bat', response['Content-Disposition'])
+        bat_content = response.content.decode()
+        self.assertIn('set "PS_ENCODED_FILE=%TEMP%', bat_content)
+        self.assertIn('[scriptblock]::Create($script)', bat_content)
+        self.assertIn('if not "%INSTALL_ERROR%"=="0" (', bat_content)
+        setup_lines = [
+            line for line in bat_content.splitlines()
+            if line.startswith('> "%PS_ENCODED_FILE%" echo ')
+            or line.startswith('>> "%PS_ENCODED_FILE%" echo ')
+        ]
+        encoded_script = ''.join(line.split(' echo ', 1)[1] for line in setup_lines)
         setup_script = base64.b64decode(encoded_script).decode('utf-16le')
+        powershell_line = next(line for line in bat_content.splitlines() if 'powershell.exe ' in line)
+        self.assertLess(len(powershell_line), 8191)
+        self.assertGreater(len(setup_lines), 1)
+        self.assertIn("Invoke-WebRequest -UseBasicParsing -Uri ($serverUrl + '/agent/script/')", setup_script)
+        self.assertIn('\n        $installDir =', setup_script)
         self.assertIn("GetFolderPath('Startup')", setup_script)
         self.assertIn('Start-Process -FilePath $pythonw', setup_script)
-        self.assertIn('/agent/script/', setup_script)
+        self.assertIn("Join-Path $env:LOCALAPPDATA 'MasofaAgent'", setup_script)
+        self.assertIn('& $launcher @launcherArgs -m venv $venvDir', setup_script)
+        self.assertNotIn('--clear $venvDir', setup_script)
+        self.assertIn("$version = '3.14'", setup_script)
+        self.assertIn("$candidateVersion -eq '3.14'", setup_script)
+        self.assertIn("Join-Path $installDir '.venv-py314'", setup_script)
+        self.assertNotIn("'3.10'", setup_script)
+        self.assertIn('Get-CimInstance Win32_Process', setup_script)
+        self.assertIn('pyautogui.screenshot().size', setup_script)
+        self.assertIn('& $agentPython -m pip install --upgrade pip websockets pyautogui pillow', setup_script)
+        self.assertIn("$serverUrl = 'https://testserver:80'", setup_script)
         self.assertNotIn('‘', setup_script)
         self.assertNotIn('’', setup_script)
 
@@ -87,6 +114,19 @@ class AgentSetupTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'async def send_screen', b''.join(response.streaming_content))
+
+    def test_agent_redirects_pythonw_output_to_a_log_file(self):
+        import agent
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch.dict(os.environ, {'LOCALAPPDATA': temp_dir}):
+                with patch('agent.sys.stdout', None), patch('agent.sys.stderr', None):
+                    agent.configure_agent_logging()
+                    print('agent log test')
+                    agent.sys.stdout.close()
+
+            log_path = Path(temp_dir) / 'MasofaAgent' / 'agent.log'
+            self.assertEqual(log_path.read_text(encoding='utf-8'), 'agent log test\n')
 
 
 class AgentFileTransferTests(TestCase):
