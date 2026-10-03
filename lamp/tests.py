@@ -14,7 +14,7 @@ from channels.testing import WebsocketCommunicator
 from agent import build_ws_url, execute_system_command
 from my_app.consumers import normalize_agent_id
 from my_app.routing import websocket_urlpatterns
-from .models import Command, Computer, SharedAccount, UserProfile
+from .models import BlockedApp, Command, Computer, SharedAccount, UserProfile
 
 
 class AgentIdValidationTests(TestCase):
@@ -391,3 +391,31 @@ class AuthFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(Computer.objects.filter(name='PC-07').exists())
+
+
+class BlockedAppIsolationTests(TestCase):
+    def test_user_only_sees_their_own_blocked_apps(self):
+        user_a = get_user_model().objects.create_user(username='userA', password='StrongPass123')
+        user_b = get_user_model().objects.create_user(username='userB', password='StrongPass123')
+
+        BlockedApp.objects.create(user=user_a, name='app_a.exe')
+        BlockedApp.objects.create(user=user_b, name='app_b.exe')
+
+        self.client.force_login(user_a)
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'app_a.exe')
+        self.assertNotContains(response, 'app_b.exe')
+
+    def test_whitelist_api_filters_blocked_apps_by_owner_id(self):
+        user_a = get_user_model().objects.create_user(username='userA', password='StrongPass123')
+        user_b = get_user_model().objects.create_user(username='userB', password='StrongPass123')
+
+        BlockedApp.objects.create(user=user_a, name='app_a.exe')
+        BlockedApp.objects.create(user=user_b, name='app_b.exe')
+
+        response_a = self.client.get(reverse('api-whitelist') + f'?owner_id={user_a.profile.account_id}')
+        self.assertEqual(response_a.status_code, 200)
+        data_a = response_a.json()
+        self.assertIn('app_a.exe', data_a['blocked_apps'])
+        self.assertNotIn('app_b.exe', data_a['blocked_apps'])

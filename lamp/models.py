@@ -79,6 +79,18 @@ class BlockedSite(models.Model):
         return self.domain
 
 
+class BlockedApp(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='blocked_apps')
+    name = models.CharField(max_length=255, help_text="Masalan: telegram.exe")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'name')
+
+    def __str__(self):
+        return f"{self.user} - {self.name}" if self.user else self.name
+
+
 class SiteWarning(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='site_warnings')
     computer_name = models.CharField(max_length=255, default="Noma'lum kompyuter", help_text="Foydalanuvchi nomi")
@@ -88,6 +100,16 @@ class SiteWarning(models.Model):
 
     def __str__(self):
         return f"{self.computer_name} - {self.domain} ({self.timestamp})"
+
+
+class AppWarning(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='app_warnings')
+    computer_name = models.CharField(max_length=255, default="Noma'lum kompyuter", help_text="Foydalanuvchi nomi")
+    app_name = models.CharField(max_length=255, help_text="Dastur nomi (masalan: telegram.exe)")
+    timestamp = models.DateTimeField(auto_now_add=True, help_text="Bloklangan vaqti")
+
+    def __str__(self):
+        return f"{self.computer_name} - {self.app_name} ({self.timestamp})"
 
 
 class Computer(models.Model):

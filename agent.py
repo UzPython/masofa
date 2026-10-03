@@ -230,6 +230,73 @@ async def monitor_blocked_access(agent_id: str, server_url=None, owner_id=None):
         await asyncio.sleep(2)
 
 
+async def monitor_blocked_apps(agent_id: str, server_url=None, owner_id=None):
+    """Taqiqlangan dasturlarni aniqlash, ularni darhol yopish (taskkill) va serverga xabar berish."""
+    base_url = get_http_base_url(server_url)
+    api_url = f"{base_url}/api/whitelist/"
+    if owner_id:
+        api_url += f"?owner_id={owner_id}"
+
+    print("[*] [DASTUR] Dastur bloklash vazifasi faollashdi.")
+
+    while True:
+        try:
+            def get_blocked_apps():
+                req = urllib.request.Request(api_url, headers={'User-Agent': 'MasofaAgent/3.0'})
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    if resp.status == 200:
+                        return json.loads(resp.read().decode('utf-8')).get('blocked_apps', [])
+                return []
+
+            blocked_apps = await asyncio.to_thread(get_blocked_apps)
+            if blocked_apps:
+                def get_running_processes():
+                    if os.name != 'nt':
+                        return set()
+                    try:
+                        res = subprocess.run("tasklist /fo csv /nh", shell=True, capture_output=True, text=True, errors='ignore')
+                        procs = set()
+                        for line in res.stdout.splitlines():
+                            parts = line.split('","')
+                            if parts:
+                                name = parts[0].strip('"').lower()
+                                procs.add(name)
+                        return procs
+                    except Exception:
+                        return set()
+
+                running_procs = await asyncio.to_thread(get_running_processes)
+                for app in blocked_apps:
+                    norm_app = app.lower().strip()
+                    if norm_app in running_procs:
+                        def kill_and_warn():
+                            try:
+                                subprocess.run(f'taskkill /f /im "{norm_app}"', shell=True, capture_output=True)
+                            except Exception:
+                                pass
+                            try:
+                                payload = {
+                                    "computer_name": agent_id,
+                                    "app_name": norm_app,
+                                    "owner_id": owner_id
+                                }
+                                data = json.dumps(payload).encode('utf-8')
+                                req = urllib.request.Request(
+                                    api_url,
+                                    data=data,
+                                    headers={'Content-Type': 'application/json', 'User-Agent': 'MasofaAgent/3.0'}
+                                )
+                                with urllib.request.urlopen(req, timeout=5):
+                                    pass
+                            except Exception:
+                                pass
+                        await asyncio.to_thread(kill_and_warn)
+                        print(f"[!] [DASTUR] Taqiqlangan dastur ishga tushdi va yopildi: {norm_app}")
+        except Exception:
+            pass
+        await asyncio.sleep(2)
+
+
 # ???????????????????? ASOSIY ASYNC VAZIFALAR ??????????????????????
 async def send_screen(agent_id: str, server_url=None, owner_id=None):
     """Ekran tasvirini real vaqtda serverga uzatish (avtomatik qayta ulanish bilan)."""
@@ -500,6 +567,7 @@ async def main(agent_id: str, server_url=None, owner_id=None):
         poll_commands(agent_id, server_url, owner_id),
         poll_whitelist(agent_id, server_url),
         monitor_blocked_access(agent_id, server_url, owner_id),
+        monitor_blocked_apps(agent_id, server_url, owner_id),
     )
 
 

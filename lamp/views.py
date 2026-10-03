@@ -17,7 +17,7 @@ from django.urls import reverse
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from .models import Command, AllowedSite, BlockedSite, SiteWarning, Computer, SharedAccount, UserProfile
+from .models import Command, AllowedSite, BlockedSite, BlockedApp, SiteWarning, AppWarning, Computer, SharedAccount, UserProfile
 from .serializers import CommandSerializer
 
 MAX_FILE_TRANSFER_BYTES = 4 * 1024 * 1024 * 1024
@@ -34,6 +34,16 @@ def normalize_domain(value):
     value = value.strip().strip('.')
     if value.startswith('www.'):
         value = value[4:]
+    return value
+
+
+def normalize_app_name(value):
+    if value is None:
+        return ''
+    value = str(value).strip().lower()
+    value = value.replace('\\', '/').rsplit('/', 1)[-1].strip()
+    if value and not value.endswith('.exe'):
+        value += '.exe'
     return value
 
 
@@ -240,6 +250,11 @@ def index_view(request):
             if domain:
                 BlockedSite.objects.get_or_create(domain=domain)
                 messages.success(request, f'{domain} qora ro\'yxatga (taqiqlandi) qo\'shildi.')
+        elif form_type == "blocked_app":
+            app_name = normalize_app_name(request.POST.get("app_name"))
+            if app_name:
+                BlockedApp.objects.get_or_create(user=request.user, name=app_name)
+                messages.success(request, f'{app_name} dasturi qora ro\'yxatga (taqiqlandi) qo\'shildi.')
         elif form_type == "computer":
             computer_name = (request.POST.get("computer_name") or "").strip()
             ip_address = (request.POST.get("computer_ip") or "").strip() or "127.0.0.1"
@@ -297,7 +312,11 @@ def index_view(request):
     commands = Command.objects.filter(user=request.user).order_by('-created_at')
     allowed_sites = AllowedSite.objects.all().order_by('-created_at')
     blocked_sites = BlockedSite.objects.all().order_by('-created_at')
+    blocked_apps = BlockedApp.objects.filter(user=request.user).order_by('-created_at')
     warnings = SiteWarning.objects.filter(
+        Q(user=request.user) | Q(user__incoming_shares__recipient=request.user)
+    ).distinct().order_by('-timestamp')
+    app_warnings = AppWarning.objects.filter(
         Q(user=request.user) | Q(user__incoming_shares__recipient=request.user)
     ).distinct().order_by('-timestamp')
     computers = Computer.objects.filter(
@@ -339,15 +358,19 @@ def index_view(request):
     total_computers = computers.count()
     online_computers = sum(1 for c in computers if c.is_online)
     total_commands = commands.count()
-    total_warnings = warnings.count()
+    total_warnings = warnings.count() + app_warnings.count()
     total_allowed_sites = allowed_sites.count()
     total_blocked_sites = blocked_sites.count()
+    total_blocked_apps = blocked_apps.count()
+    total_app_warnings = app_warnings.count()
 
     context = {
         'commands': commands,
         'allowed_sites': allowed_sites,
         'blocked_sites': blocked_sites,
+        'blocked_apps': blocked_apps,
         'warnings': warnings,
+        'app_warnings': app_warnings,
         'computers': computers,
         'shared_accounts': shared_accounts,
         'shared_account_count': shared_account_count,
@@ -361,6 +384,8 @@ def index_view(request):
         'total_warnings': total_warnings,
         'total_allowed_sites': total_allowed_sites,
         'total_blocked_sites': total_blocked_sites,
+        'total_blocked_apps': total_blocked_apps,
+        'total_app_warnings': total_app_warnings,
     }
     return render(request, 'index.html', context)
 
@@ -371,6 +396,23 @@ def delete_blocked_site(request, site_id):
     domain = site.domain
     site.delete()
     messages.success(request, f"'{domain}' taqiqlar ro'yxatidan olib tashlandi.")
+    return redirect('home')
+
+
+@login_required(login_url='login')
+def delete_blocked_app(request, app_id):
+    app = get_object_or_404(BlockedApp, id=app_id, user=request.user)
+    name = app.name
+    app.delete()
+    messages.success(request, f"'{name}' dasturi taqiqlar ro'yxatidan olib tashlandi.")
+    return redirect('home')
+
+
+@login_required(login_url='login')
+def clear_app_warnings(request):
+    count = AppWarning.objects.count()
+    AppWarning.objects.all().delete()
+    messages.success(request, f"{count} ta dastur bloklash ogohlantirishlari tozalandi.")
     return redirect('home')
 
 
@@ -716,18 +758,56 @@ class CheckSiteAPIView(APIView):
 
 
 class WhitelistAPIView(APIView):
-    """Agent uchun: ruxsat etilgan va taqiqlangan domenlar ro'yxatini qaytaradi."""
+    """Agent uchun: ruxsat etilgan va taqiqlangan domenlar hamda dasturlar ro'yxatini qaytaradi."""
     permission_classes = [AllowAny]
 
     def get(self, request):
+        owner_id = request.GET.get("owner_id")
         allowed = list(AllowedSite.objects.values_list('domain', flat=True))
         blocked = list(BlockedSite.objects.values_list('domain', flat=True))
+        
+        if owner_id:
+            blocked_apps_qs = BlockedApp.objects.none()
+            profile = UserProfile.objects.filter(account_id=str(owner_id)).first()
+            if profile:
+                blocked_apps_qs = BlockedApp.objects.filter(user=profile.user)
+            elif str(owner_id).isdigit():
+                blocked_apps_qs = BlockedApp.objects.filter(user_id=owner_id)
+        else:
+            blocked_apps_qs = BlockedApp.objects.all()
+            
+        blocked_apps = list(blocked_apps_qs.values_list('name', flat=True))
         return Response({
             "allowed_domains": allowed,
             "blocked_domains": blocked,
+            "blocked_apps": blocked_apps,
             "allowed_count": len(allowed),
-            "blocked_count": len(blocked)
+            "blocked_count": len(blocked),
+            "blocked_apps_count": len(blocked_apps)
         })
+
+    def post(self, request):
+        computer_name = request.data.get("computer_name", "Noma'lum kompyuter")
+        owner_id = request.data.get("owner_id")
+        app_name = request.data.get("app_name")
+
+        if not app_name:
+            return Response({"status": "invalid data"}, status=400)
+
+        target_user = None
+        display_name = computer_name
+        if owner_id:
+            profile = UserProfile.objects.filter(account_id=str(owner_id)).first()
+            if profile:
+                target_user = profile.user
+                display_name = profile.user.username
+
+        AppWarning.objects.create(
+            user=target_user,
+            computer_name=display_name,
+            app_name=app_name,
+        )
+        return Response({"status": "app warning recorded"}, status=201)
 
 
 class AjaxBlockSiteView(APIView):
