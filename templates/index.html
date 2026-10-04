@@ -899,7 +899,7 @@
                     </div>
                     <div class="text-xs text-indigo-900 space-y-1">
                         <p class="font-bold text-sm">Doimiy fon rejimi (Background Persistence)</p>
-                        <p>Chrome brauzerini yopib chiqib ketsangiz ham, ulangan kompyuterdagi agent (<code class="font-mono bg-indigo-100 px-1.5 py-0.5 rounded">agent.py</code>) orqa fonda ishlashda davom etadi. Brauzerni qayta ochib <code class="font-mono bg-indigo-100 px-1.5 py-0.5 rounded">localhost:8000</code> ga kirsangiz, kompyuterni yana to'liq boshqara va kuzata olasiz!</p>
+                        <p>Ulangan kompyuterdagi <code class="font-mono bg-indigo-100 px-1.5 py-0.5 rounded">masofa_212.bat</code> launcher agentni orqa fonda ishga tushiradi. Chrome brauzerini yopib, keyin qayta ochsangiz ham kompyuter ishlashda davom etadi.</p>
                     </div>
                 </div>
             </div>
@@ -2067,7 +2067,10 @@
                                         fileListScreen.innerHTML = `<div class="p-4 text-rose-600 bg-rose-50 rounded-xl text-xs font-medium mb-2">[Xatolik] Papkani o'qib bo'lmadi yoki noto'g'ri format.</div><pre class="p-3 bg-slate-900 text-slate-200 text-xs rounded-xl overflow-auto font-mono">${escapeHtml(output)}</pre>`;
                                     }
                                 }
-                            } catch (err) {}
+                            } catch (err) {
+                                clearInterval(pollInterval);
+                                fileListScreen.innerHTML = `<div class="p-4 text-rose-600 bg-rose-50 rounded-xl text-xs">[Xato] Buyruq holatini tekshirib bo'lmadi: ${escapeHtml(err.message || 'Server bilan aloqa uzildi.')}</div>`;
+                            }
                         }, 1000);
                     } else {
                         fileListScreen.innerHTML = `<div class="p-4 text-rose-600 bg-rose-50 rounded-xl text-xs">[Xato] Buyruq yuborilmadi.</div>`;

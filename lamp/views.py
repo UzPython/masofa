@@ -719,7 +719,7 @@ def execute_system_command_local(command_text: str) -> str:
                     })
             return '__JSON_START__' + json.dumps({'status': 'ok', 'path': path, 'items': items}, ensure_ascii=False) + '__JSON_END__'
         except Exception as e:
-            return '__JSON_START__' + json.dumps({'status': 'error', 'message': str(e)}, ensure_ascii=False) + '__FILE_JSON_END__'
+            return '__JSON_START__' + json.dumps({'status': 'error', 'message': str(e)}, ensure_ascii=False) + '__JSON_END__'
 
     try:
         startupinfo = None

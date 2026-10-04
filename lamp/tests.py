@@ -18,6 +18,7 @@ from agent import apply_web_filter, blocked_url_patterns, build_ws_url, execute_
 from my_app.consumers import normalize_agent_id
 from my_app.routing import websocket_urlpatterns
 from .models import BlockedApp, BlockedSite, Command, Computer, SharedAccount, UserProfile
+from .views import execute_system_command_local
 from site_rules.models import AgentCommandRoute, SiteRule
 
 
@@ -199,6 +200,16 @@ class AgentSetupTests(TestCase):
 
 
 class AgentFileTransferTests(TestCase):
+    def test_local_directory_listing_errors_use_the_expected_json_end_marker(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            missing_path = Path(temp_dir) / 'missing-masofa-folder'
+            result = execute_system_command_local(f'__LIST_DIR__:{missing_path}')
+
+        self.assertTrue(result.startswith('__JSON_START__'))
+        self.assertTrue(result.endswith('__JSON_END__'))
+        payload = json.loads(result[len('__JSON_START__'):-len('__JSON_END__')])
+        self.assertEqual(payload['status'], 'error')
+
     def test_file_download_returns_stream_descriptor(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             file_path = Path(temp_dir) / 'sample.bin'
