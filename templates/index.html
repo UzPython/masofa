@@ -1341,7 +1341,7 @@
         <!-- TAB: DASTURLAR TAQIQLASH (APP BLOCKING TAB)                 -->
         <!-- ============================================================ -->
         <div id="tab-apps" class="tab-content hidden space-y-6">
-            <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+            <div data-app-blocker class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
                 <div>
                     <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
                         <i class="fa-solid fa-desktop text-rose-600"></i> Kompyuter Dasturlarini Taqiqlash (App Blocking)
@@ -1624,7 +1624,7 @@
             </div>
 
             <!-- Kompyuter Dasturlarini Taqiqlash (App Blocking Card) -->
-            <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+            <div data-app-blocker class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
                 <div>
                     <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
                         <i class="fa-solid fa-desktop text-rose-600"></i> Taqiqlangan Dasturlar (Kompyuter Dasturlarini Bloklash)
@@ -1633,7 +1633,7 @@
                 </div>
 
                 <!-- Dastur qo'shish formasi -->
-                <form method="POST" id="blockAppForm" class="space-y-3">
+                <form method="POST" id="blockAppFormSharing" class="space-y-3">
                     {% csrf_token %}
                     <input type="hidden" name="form_type" value="blocked_app">
                     <div class="flex gap-2">
@@ -1836,7 +1836,12 @@
         }
 
         // 3. JONLI EKRAN TOMOSHA QILISH (WEBSOCKET VIEWER)
+        let firstFrameTimeout = null;
         function openScreenViewer(streamKey, streamName) {
+            if (firstFrameTimeout) {
+                clearTimeout(firstFrameTimeout);
+                firstFrameTimeout = null;
+            }
             if (socket) socket.close();
             currentStreamName = streamName;
             currentStreamTitle.innerText = streamName;
@@ -1846,7 +1851,7 @@
                 <div class="inline-flex p-4 rounded-2xl bg-slate-800/60 text-slate-400 text-3xl border border-slate-700">
                     <i class="fa-solid fa-spinner fa-spin text-cyan-400"></i>
                 </div>
-                <h3 class="text-slate-300 font-semibold text-base">${streamName} dan birinchi kadr kutilmoqda...</h3>
+                <h3 class="text-slate-300 font-semibold text-base">${escapeHtml(streamName)} dan birinchi kadr kutilmoqda...</h3>
             `;
             statusText.style.display = 'block';
             let receivedFrame = false;
@@ -1854,13 +1859,31 @@
             const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
             const wsUrl = wsProtocol + window.location.host + '/ws/screen/' + encodeURIComponent(streamKey) + '/?role=viewer';
 
-            socket = new WebSocket(wsUrl);
-            socket.binaryType = 'blob';
+            const activeSocket = new WebSocket(wsUrl);
+            socket = activeSocket;
+            activeSocket.binaryType = 'blob';
 
-            socket.onopen = function () {
+            activeSocket.onopen = function () {
+                if (socket !== activeSocket) return;
                 showToast(`${streamName}: serverga ulandi, kadr kutilmoqda`, 'fa-spinner fa-spin text-cyan-400');
+                firstFrameTimeout = setTimeout(() => {
+                    if (receivedFrame || socket !== activeSocket || activeSocket.readyState !== WebSocket.OPEN) return;
+                    statusText.innerHTML = `
+                        <div class="inline-flex p-4 rounded-2xl bg-amber-500/10 text-amber-300 text-3xl border border-amber-400/20">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                        </div>
+                        <h3 class="text-slate-200 font-semibold text-base">Agentdan ekran kadri kelmadi</h3>
+                        <p class="text-xs text-slate-400 max-w-sm mx-auto">${escapeHtml(streamName)} kompyuterida Masofa Agent ishlayotganini tekshiring.</p>
+                    `;
+                    showToast(`${streamName}: agent kadr yubormayapti`, 'fa-triangle-exclamation text-amber-300');
+                }, 12000);
             };
-            socket.onmessage = function (event) {
+            activeSocket.onmessage = function (event) {
+                if (socket !== activeSocket) return;
+                if (firstFrameTimeout) {
+                    clearTimeout(firstFrameTimeout);
+                    firstFrameTimeout = null;
+                }
                 const blob = event.data instanceof Blob ? event.data : new Blob([event.data], { type: 'image/jpeg' });
                 const url = URL.createObjectURL(blob);
                 screenStream.onload = function () {
@@ -1874,18 +1897,25 @@
                     showToast(`Jonli efir boshlandi: ${streamName}`);
                 }
             };
-            socket.onclose = function () {
+            activeSocket.onclose = function () {
+                if (socket !== activeSocket) return;
+                socket = null;
+                if (firstFrameTimeout) {
+                    clearTimeout(firstFrameTimeout);
+                    firstFrameTimeout = null;
+                }
                 screenStream.style.visibility = 'hidden';
                 statusText.innerHTML = `
                     <div class="inline-flex p-4 rounded-2xl bg-slate-800/60 text-slate-400 text-3xl border border-slate-700">
                         <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
                     </div>
-                    <h3 class="text-slate-300 font-semibold text-base">${streamName} bilan aloqa uzildi</h3>
+                    <h3 class="text-slate-300 font-semibold text-base">${escapeHtml(streamName)} bilan aloqa uzildi</h3>
                     <p class="text-xs text-slate-500">Foydalanuvchi oflayn yoki boshqa efirni tanlang.</p>
                 `;
                 statusText.style.display = 'block';
             };
-            socket.onerror = function () {
+            activeSocket.onerror = function () {
+                if (socket !== activeSocket) return;
                 statusText.innerHTML = `
                     <div class="inline-flex p-4 rounded-2xl bg-slate-800/60 text-slate-400 text-3xl border border-slate-700">
                         <i class="fa-solid fa-circle-xmark text-rose-500"></i>
@@ -2184,7 +2214,7 @@
 
         document.querySelectorAll('.preset-app-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                const appInput = document.querySelector('#blockAppForm input[name="app_name"]');
+                const appInput = btn.closest('[data-app-blocker]')?.querySelector('input[name="app_name"]');
                 if (appInput) {
                     appInput.value = btn.dataset.app;
                     appInput.focus();

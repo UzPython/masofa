@@ -119,7 +119,7 @@ class Computer(models.Model):
     ip_address = models.GenericIPAddressField(default="127.0.0.1")
     username = models.CharField(max_length=100, default='agent')
     password = models.CharField(max_length=128, default='agent123')
-    is_online = models.BooleanField(default=True)
+    is_online = models.BooleanField(default=False)
     last_seen = models.DateTimeField(auto_now=True)
     status_text = models.CharField(max_length=150, default="Online")
     created_at = models.DateTimeField(auto_now_add=True)

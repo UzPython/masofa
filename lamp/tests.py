@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import time
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,6 +12,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
 
@@ -325,6 +327,27 @@ class AgentWebsocketConnectionTests(TransactionTestCase):
         await agent.disconnect()
         await viewer.disconnect()
 
+    async def test_agent_frames_refresh_computer_last_seen(self):
+        owner = await get_user_model().objects.acreate(username='heartbeat-owner', password='StrongPass123')
+        profile = await UserProfile.objects.aget(user=owner)
+        machine = await Computer.objects.acreate(owner=owner, name='PC-Heartbeat', is_online=False)
+        communicator = WebsocketCommunicator(
+            URLRouter(websocket_urlpatterns),
+            f'/ws/screen/{profile.account_id}__PC-Heartbeat/?role=agent',
+        )
+
+        connected, _ = await communicator.connect()
+        self.assertTrue(connected)
+        old_last_seen = timezone.now() - timedelta(minutes=1)
+        await Computer.objects.filter(pk=machine.pk).aupdate(last_seen=old_last_seen)
+        with patch('my_app.consumers.AGENT_HEARTBEAT_INTERVAL', 0):
+            await communicator.send_to(bytes_data=b'heartbeat-frame')
+
+        machine = await Computer.objects.aget(pk=machine.pk)
+        self.assertTrue(machine.is_online)
+        self.assertGreater(machine.last_seen, old_last_seen)
+        await communicator.disconnect()
+
     async def test_agent_connects_when_computer_names_are_duplicated(self):
         await Computer.objects.acreate(name='123')
         await Computer.objects.acreate(name='123')
@@ -377,6 +400,33 @@ class AgentWebsocketConnectionTests(TransactionTestCase):
         self.assertEqual(await viewer.receive_from(), b'jpeg-frame')
         await publisher.disconnect()
         await viewer.disconnect()
+
+
+class ComputerOnlineStateTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='computer-status', password='StrongPass123')
+        self.client.force_login(self.user)
+
+    def test_dashboard_placeholder_computer_starts_offline_until_agent_connects(self):
+        response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        computer = Computer.objects.get(owner=self.user)
+        self.assertFalse(computer.is_online)
+        self.assertEqual(computer.status_text, 'Offline')
+
+    def test_dashboard_marks_inactive_agent_offline(self):
+        computer = Computer.objects.create(owner=self.user, name='PC-Stale', is_online=True)
+        Computer.objects.filter(pk=computer.pk).update(
+            last_seen=timezone.now() - timedelta(minutes=1),
+        )
+
+        response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        computer.refresh_from_db()
+        self.assertFalse(computer.is_online)
+        self.assertEqual(computer.status_text, 'Offline')
 
 
 class UserAccessIsolationTests(TestCase):

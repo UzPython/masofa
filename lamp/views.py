@@ -5,6 +5,7 @@ import os
 import tempfile
 import time
 import uuid
+from datetime import timedelta
 from pathlib import Path
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, get_user_model
@@ -16,6 +17,7 @@ from django.db.models import Prefetch, Q
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -238,6 +240,13 @@ def admin_create_view(request):
 
 @login_required(login_url='login')
 def index_view(request):
+    stale_cutoff = timezone.now() - timedelta(seconds=45)
+    Computer.objects.filter(
+        Q(owner=request.user) | Q(shared_with=request.user),
+        is_online=True,
+        last_seen__lt=stale_cutoff,
+    ).update(is_online=False, status_text='Offline')
+
     if request.method == "POST":
         form_type = request.POST.get("form_type")
 
@@ -285,17 +294,15 @@ def index_view(request):
                         "ip_address": ip_address,
                         "username": username,
                         "password": password,
-                        "is_online": True,
-                        "status_text": "Online",
+                        "is_online": False,
+                        "status_text": "Offline",
                     },
                 )
                 if not created:
                     computer.ip_address = ip_address
                     computer.username = username
                     computer.password = password
-                    computer.is_online = True
-                    computer.status_text = "Online"
-                    computer.save(update_fields=['ip_address', 'username', 'password', 'is_online', 'status_text'])
+                    computer.save(update_fields=['ip_address', 'username', 'password'])
                 messages.success(request, f'{computer_name} kompyuteri saqlandi.')
         elif form_type == "share_access":
             share_id = (request.POST.get("share_id") or "").strip()
@@ -356,8 +363,8 @@ def index_view(request):
                 "ip_address": "127.0.0.1",
                 "username": "agent",
                 "password": "agent123",
-                "is_online": True,
-                "status_text": "Online",
+                "is_online": False,
+                "status_text": "Offline",
             }
         )
         computers = Computer.objects.filter(
