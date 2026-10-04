@@ -132,12 +132,581 @@
             background: linear-gradient(to bottom, rgba(16, 185, 129, 0), rgba(16, 185, 129, 0.3), rgba(16, 185, 129, 0));
             animation: scanline 4s linear infinite;
         }
+
+        :root {
+            color-scheme: light;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            min-width: 320px;
+            background-color: #f3f5fb;
+            background-image:
+                radial-gradient(ellipse at 8% 0%, rgba(99, 102, 241, 0.1), transparent 34rem),
+                radial-gradient(ellipse at 100% 28%, rgba(14, 165, 233, 0.07), transparent 30rem);
+        }
+
+        .dashboard-header {
+            background-image: linear-gradient(112deg, #111b3c 0%, #30256f 52%, #263c88 100%) !important;
+            box-shadow: 0 12px 34px rgba(28, 35, 83, 0.2);
+            backdrop-filter: blur(18px);
+        }
+
+        .dashboard-header > div {
+            max-width: 1440px;
+            min-height: 76px;
+        }
+
+        .dashboard-main {
+            max-width: 1440px;
+            padding-top: 30px;
+            padding-bottom: 40px;
+        }
+
+        .dashboard-hero {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            min-height: 210px;
+            overflow: hidden;
+            padding: clamp(26px, 5vw, 48px);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 30px;
+            color: #fff;
+            background:
+                radial-gradient(circle at 80% 15%, rgba(129, 140, 248, 0.42), transparent 17rem),
+                linear-gradient(120deg, #171d43 0%, #352878 52%, #3158a8 100%);
+            box-shadow: 0 24px 54px rgba(42, 46, 115, 0.2);
+        }
+
+        .dashboard-hero::before,
+        .dashboard-hero::after {
+            position: absolute;
+            content: "";
+            pointer-events: none;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 50%;
+        }
+
+        .dashboard-hero::before {
+            width: 330px;
+            height: 330px;
+            top: -190px;
+            right: 8%;
+        }
+
+        .dashboard-hero::after {
+            width: 430px;
+            height: 430px;
+            right: -110px;
+            bottom: -310px;
+        }
+
+        .dashboard-hero-copy,
+        .dashboard-hero-art {
+            position: relative;
+            z-index: 1;
+        }
+
+        .dashboard-hero-copy {
+            max-width: 680px;
+        }
+
+        .dashboard-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            margin-bottom: 15px;
+            color: #c7d2fe;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.14em;
+        }
+
+        .dashboard-eyebrow span {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #34d399;
+            box-shadow: 0 0 0 5px rgba(52, 211, 153, 0.15), 0 0 18px rgba(52, 211, 153, 0.7);
+        }
+
+        .dashboard-hero h2 {
+            margin: 0;
+            color: #fff;
+            font-size: clamp(28px, 4vw, 43px);
+            font-weight: 800;
+            letter-spacing: -0.045em;
+            line-height: 1.12;
+        }
+
+        .dashboard-hero p {
+            max-width: 580px;
+            margin: 12px 0 0;
+            color: #d7dcf5;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        .dashboard-hero-art {
+            display: grid;
+            width: 116px;
+            height: 116px;
+            flex: 0 0 116px;
+            place-items: center;
+            border: 1px solid rgba(255, 255, 255, 0.23);
+            border-radius: 32px;
+            color: #c4b5fd;
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.19), rgba(255, 255, 255, 0.045));
+            box-shadow: inset 0 1px rgba(255, 255, 255, 0.2), 0 18px 35px rgba(10, 14, 47, 0.22);
+            transform: rotate(5deg);
+        }
+
+        .dashboard-hero-art i {
+            font-size: 44px;
+            filter: drop-shadow(0 8px 15px rgba(165, 180, 252, 0.28));
+        }
+
+        .dashboard-stat-card {
+            position: relative;
+            min-width: 0;
+            padding: 19px !important;
+            border-color: #e6e9f2 !important;
+            border-radius: 21px !important;
+            background: rgba(255, 255, 255, 0.92) !important;
+            box-shadow: 0 8px 22px rgba(27, 39, 82, 0.045) !important;
+            transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+        }
+
+        .dashboard-stat-card:hover {
+            transform: translateY(-3px);
+            border-color: #c7d2fe !important;
+            box-shadow: 0 15px 32px rgba(49, 46, 129, 0.11) !important;
+        }
+
+        .dashboard-stat-card > div:first-child {
+            width: 46px;
+            height: 46px;
+            border-radius: 15px;
+        }
+
+        .dashboard-stat-card p:last-child {
+            margin-top: 4px;
+            letter-spacing: -0.025em;
+        }
+
+        .dashboard-tabs {
+            position: sticky;
+            top: 88px;
+            z-index: 30;
+            flex-wrap: nowrap !important;
+            overflow-x: auto;
+            overscroll-behavior-x: contain;
+            scrollbar-width: none;
+            padding: 7px !important;
+            border-color: #e6e9f2 !important;
+            border-radius: 18px !important;
+            background: rgba(255, 255, 255, 0.88) !important;
+            box-shadow: 0 10px 28px rgba(27, 39, 82, 0.07) !important;
+            backdrop-filter: blur(16px);
+        }
+
+        .dashboard-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .dashboard-tabs .tab-btn {
+            flex: 0 0 auto;
+            min-height: 44px;
+            padding: 11px 15px;
+            border: 1px solid transparent;
+            border-radius: 13px;
+            white-space: nowrap;
+        }
+
+        .dashboard-tabs .tab-btn:not(.active):hover {
+            color: #4338ca !important;
+            background: #f1f2ff !important;
+        }
+
+        .dashboard-tabs .tab-btn.active {
+            background: linear-gradient(135deg, #4f46e5, #6d55e9) !important;
+            box-shadow: 0 7px 16px rgba(79, 70, 229, 0.23);
+        }
+
+        main > .tab-content:not(.hidden) {
+            animation: dashboard-enter 260ms ease both;
+        }
+
+        main .tab-content > .bg-white,
+        main .tab-content .lg\:col-span-2 > .bg-white {
+            border-color: #e6e9f2;
+            border-radius: 22px;
+            box-shadow: 0 9px 28px rgba(27, 39, 82, 0.055);
+        }
+
+        main .tab-content input:not([type="hidden"]),
+        main .tab-content select,
+        main .tab-content textarea {
+            border-radius: 12px;
+            transition: border-color 160ms ease, box-shadow 160ms ease;
+        }
+
+        main .tab-content input:focus,
+        main .tab-content select:focus,
+        main .tab-content textarea:focus {
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
+        }
+
+        main .tab-content button,
+        main .tab-content a {
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #streamContainerCard {
+            border-radius: 26px;
+            box-shadow: 0 22px 48px rgba(15, 23, 42, 0.16);
+        }
+
+        #videoWrapper {
+            border-radius: 19px;
+        }
+
+        #terminalScreen {
+            scrollbar-color: #334155 #070b14;
+        }
+
+        @keyframes dashboard-enter {
+            from { opacity: 0; transform: translateY(7px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        html.theme-dark {
+            color-scheme: dark;
+        }
+
+        html.theme-dark body {
+            background-image:
+                radial-gradient(ellipse at 8% 0%, rgba(79, 70, 229, 0.14), transparent 34rem),
+                radial-gradient(ellipse at 100% 28%, rgba(14, 165, 233, 0.08), transparent 30rem);
+        }
+
+        html.theme-dark .dashboard-stat-card,
+        html.theme-dark .dashboard-tabs {
+            background: rgba(17, 24, 39, 0.94) !important;
+            border-color: #26344d !important;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16) !important;
+        }
+
+        html.theme-dark .dashboard-tabs .tab-btn:not(.active):hover {
+            color: #c7d2fe !important;
+            background: #1e293b !important;
+        }
+
+        html.theme-dark main .tab-content > .bg-white,
+        html.theme-dark main .tab-content .lg\:col-span-2 > .bg-white {
+            border-color: #26344d;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
+        }
+
+        @media (max-width: 760px) {
+            .dashboard-header > div {
+                min-height: 66px;
+                gap: 10px;
+                padding: 10px 16px;
+            }
+
+            .dashboard-header > div > div:first-child {
+                gap: 10px;
+            }
+
+            .dashboard-header h1 {
+                font-size: 15px;
+            }
+
+            .dashboard-header p {
+                max-width: 220px;
+                font-size: 10px;
+            }
+
+            .dashboard-main {
+                padding: 20px 14px 30px;
+                gap: 18px;
+            }
+
+            .dashboard-hero {
+                min-height: 178px;
+                padding: 25px 22px;
+                border-radius: 24px;
+            }
+
+            .dashboard-hero h2 {
+                font-size: clamp(27px, 7vw, 36px);
+            }
+
+            .dashboard-hero p {
+                max-width: 460px;
+                font-size: 13px;
+            }
+
+            .dashboard-hero-art {
+                width: 76px;
+                height: 76px;
+                flex-basis: 76px;
+                border-radius: 23px;
+            }
+
+            .dashboard-hero-art i {
+                font-size: 31px;
+            }
+
+            .dashboard-stat-card {
+                gap: 10px !important;
+                padding: 14px 12px !important;
+                border-radius: 17px !important;
+            }
+
+            .dashboard-stat-card > div:first-child {
+                width: 38px;
+                height: 38px;
+                border-radius: 12px;
+                font-size: 15px;
+            }
+
+            .dashboard-stat-card p:first-child {
+                font-size: 10px;
+                line-height: 1.35;
+            }
+
+            .dashboard-stat-card p:last-child {
+                font-size: 16px;
+                line-height: 1.3;
+            }
+
+            .dashboard-tabs {
+                position: relative;
+                top: auto;
+                margin-right: -2px;
+                margin-left: -2px;
+            }
+
+            .dashboard-tabs .tab-btn {
+                min-height: 42px;
+                padding: 10px 12px;
+                font-size: 12px;
+            }
+
+            #streamContainerCard {
+                padding: 14px;
+                border-radius: 22px;
+            }
+
+            #streamContainerCard > .mb-4 {
+                align-items: flex-start;
+            }
+
+            #streamContainerCard > .mb-4 > .flex:first-child {
+                flex-wrap: wrap;
+            }
+
+            #streamContainerCard > .mb-4 > .flex:last-child {
+                width: 100%;
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            #streamContainerCard > .mb-4 > .flex:last-child > * {
+                justify-content: center;
+                min-height: 42px;
+                padding-right: 8px;
+                padding-left: 8px;
+            }
+
+            #videoWrapper {
+                min-height: 210px;
+                aspect-ratio: 4 / 3;
+            }
+
+            #statusText {
+                padding: 14px;
+            }
+
+            #statusText h3 {
+                font-size: 14px;
+            }
+
+            #statusText p {
+                font-size: 11px;
+                line-height: 1.55;
+            }
+
+            #streamContainerCard > .mt-4 {
+                align-items: flex-start;
+            }
+
+            #streamContainerCard > .mt-4 > div:last-child {
+                width: 100%;
+            }
+
+            main .tab-content .bg-white.p-5,
+            main .tab-content .bg-white.p-6 {
+                padding: 18px;
+            }
+
+            #ajaxCommandForm {
+                padding: 10px;
+            }
+
+            #terminalScreen {
+                height: 58vh;
+                min-height: 260px;
+                max-height: 440px;
+                padding: 16px;
+            }
+
+            .quick-cmd-btn {
+                min-height: 88px;
+            }
+
+            .responsive-inline-form > .flex {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .responsive-inline-form > .flex > button {
+                width: 100%;
+                min-height: 44px;
+                justify-content: center;
+            }
+
+            #fileBrowserForm {
+                align-items: stretch;
+            }
+
+            #fileBrowserForm > button {
+                min-height: 44px;
+                padding-right: 13px;
+                padding-left: 13px;
+            }
+
+            .dashboard-main table {
+                min-width: 620px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .dashboard-header > div {
+                align-items: flex-start;
+            }
+
+            .dashboard-header > div > div:last-child {
+                justify-content: flex-end;
+                gap: 6px;
+            }
+
+            #themeToggle,
+            .dashboard-header a[href*="logout"] {
+                min-height: 40px;
+                padding: 9px 10px;
+            }
+
+            .dashboard-header > div > div:last-child > div {
+                max-width: 145px;
+                flex-wrap: wrap;
+                justify-content: flex-end;
+                gap: 4px;
+                padding: 5px 7px;
+            }
+
+            .dashboard-header > div > div:last-child > div > span:first-child {
+                max-width: 100%;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .dashboard-hero {
+                min-height: 0;
+                padding: 23px 19px;
+            }
+
+            .dashboard-hero-art {
+                width: 56px;
+                height: 56px;
+                flex-basis: 56px;
+                border-radius: 18px;
+            }
+
+            .dashboard-hero-art i {
+                font-size: 23px;
+            }
+
+            .dashboard-eyebrow {
+                margin-bottom: 11px;
+                font-size: 9px;
+            }
+
+            .dashboard-hero p {
+                margin-top: 9px;
+                font-size: 12px;
+            }
+
+            .dashboard-stat-card {
+                align-items: flex-start !important;
+                flex-direction: column;
+                min-height: 118px;
+            }
+
+            .dashboard-stat-card p:last-child {
+                overflow-wrap: anywhere;
+                font-size: 15px;
+            }
+
+            #streamContainerCard > .mb-4 > .flex:last-child {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .tab-content .flex.items-center.justify-between {
+                gap: 12px;
+            }
+
+            #terminalSendBtn {
+                padding-right: 11px;
+                padding-left: 11px;
+                white-space: nowrap;
+            }
+
+            #fileBrowserForm {
+                flex-direction: column;
+            }
+
+            #fileBrowserForm > button {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                scroll-behavior: auto !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
     </style>
 </head>
 <body class="bg-slate-100 font-sans text-slate-800 antialiased min-h-screen flex flex-col">
 
     <!-- Asosiy Navigatsiya (Navbar) -->
-    <header class="bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-800 shadow-lg text-white sticky top-0 z-40 border-b border-indigo-500/20">
+    <header class="dashboard-header bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-800 shadow-lg text-white sticky top-0 z-40 border-b border-indigo-500/20">
         <div class="max-w-7xl mx-auto px-4 py-3.5 flex flex-wrap justify-between items-center gap-4">
             
             <!-- Logo & Brend -->
@@ -171,9 +740,9 @@
                     </span>
                     {% if account_id %}
                     <span class="text-indigo-400">|</span>
-                    <button type="button" id="copyNavIdBtn" class="flex items-center gap-1 font-mono text-[11px] bg-indigo-500/30 hover:bg-indigo-500/50 text-indigo-100 px-2 py-0.5 rounded-lg border border-indigo-300/20 transition" title="ID-ni nusxalash">
+                    <button type="button" id="copyNavIdBtn" data-account-id="{{ account_id }}" class="flex items-center gap-1 font-mono text-[11px] bg-indigo-500/30 hover:bg-indigo-500/50 text-indigo-100 px-2 py-0.5 rounded-lg border border-indigo-300/20 transition" title="ID-ni nusxalash" aria-label="Maxsus ID-ni nusxalash">
                         <i class="fa-solid fa-key text-[10px] text-amber-300"></i>
-                        <span>ID: {{ account_id }}</span>
+                        <span>ID: ••••••••••••••••••••</span>
                         <i class="fa-solid fa-copy text-[10px] ml-1"></i>
                     </button>
                     {% endif %}
@@ -207,7 +776,7 @@
     {% endif %}
 
     <!-- Asosiy Konteyner -->
-    <main class="max-w-7xl mx-auto px-4 py-6 flex-grow w-full space-y-6">
+    <main class="dashboard-main max-w-7xl mx-auto px-4 py-6 flex-grow w-full space-y-6">
 
         {% if warnings %}
         <div class="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 flex items-center justify-between gap-3 text-rose-200 shadow-lg">
@@ -226,10 +795,21 @@
         </div>
         {% endif %}
 
+        <section class="dashboard-hero" aria-labelledby="dashboardTitle">
+            <div class="dashboard-hero-copy">
+                <span class="dashboard-eyebrow"><span></span> MASOFA · BOSHQARUV PANELI</span>
+                <h2 id="dashboardTitle">Hammasi nazorat ostida.</h2>
+                <p>Qurilmalarni kuzating, masofadan boshqaring va xavfsizlik holatini bitta qulay paneldan nazorat qiling.</p>
+            </div>
+            <div class="dashboard-hero-art" aria-hidden="true">
+                <i class="fa-solid fa-satellite-dish"></i>
+            </div>
+        </section>
+
         <!-- STATISTIKA KARTALARI (KPI CARDS) -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div class="dashboard-stat-grid grid grid-cols-2 lg:grid-cols-4 gap-3.5">
             <!-- Ulangan do'stlar -->
-            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition">
+            <div class="dashboard-stat-card bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition">
                 <div class="h-11 w-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg shrink-0">
                     <i class="fa-solid fa-share-nodes"></i>
                 </div>
@@ -240,7 +820,7 @@
             </div>
 
             <!-- Bajarilgan buyruqlar -->
-            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition">
+            <div class="dashboard-stat-card bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition">
                 <div class="h-11 w-11 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center text-lg shrink-0">
                     <i class="fa-solid fa-terminal"></i>
                 </div>
@@ -251,7 +831,7 @@
             </div>
 
             <!-- Oq ro'yxat saytlari -->
-            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition">
+            <div class="dashboard-stat-card bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition">
                 <div class="h-11 w-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-lg shrink-0">
                     <i class="fa-solid fa-shield-halved"></i>
                 </div>
@@ -262,7 +842,7 @@
             </div>
 
             <!-- Xavfsizlik signallari -->
-            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition">
+            <div class="dashboard-stat-card bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 hover:shadow-md transition">
                 <div class="h-11 w-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-lg shrink-0">
                     <i class="fa-solid fa-triangle-exclamation"></i>
                 </div>
@@ -274,7 +854,7 @@
         </div>
 
         <!-- TABLAR NAVIGATSIYASI (TAB HEADERS) -->
-        <div class="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap gap-1.5">
+        <div class="dashboard-tabs bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap gap-1.5">
             <button type="button" class="tab-btn active inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition duration-150 bg-indigo-600 text-white shadow-sm" data-tab="tab-screen">
                 <i class="fa-solid fa-display"></i>
                 <span>Jonli Ekran</span>
@@ -610,7 +1190,7 @@
                     </div>
 
                     <!-- Domain qo'shish formasi -->
-                    <form method="POST" class="space-y-3">
+                    <form method="POST" class="space-y-3 responsive-inline-form">
                         {% csrf_token %}
                         <input type="hidden" name="form_type" value="allowed_site">
                         <div class="flex gap-2">
@@ -664,7 +1244,7 @@
                     </div>
 
                     <!-- Domain qo'shish formasi -->
-                    <form method="POST" id="blockSiteForm" class="space-y-3">
+                    <form method="POST" id="blockSiteForm" class="space-y-3 responsive-inline-form">
                         {% csrf_token %}
                         <input type="hidden" name="form_type" value="blocked_site">
                         <div class="flex gap-2">
@@ -770,7 +1350,7 @@
                 </div>
 
                 <!-- Dastur qo'shish formasi -->
-                <form method="POST" id="blockAppForm" class="space-y-3">
+                <form method="POST" id="blockAppForm" class="space-y-3 responsive-inline-form">
                     {% csrf_token %}
                     <input type="hidden" name="form_type" value="blocked_app">
                     <div class="flex gap-2">
@@ -927,10 +1507,10 @@
                     {% if account_id %}
                     <div class="bg-black/30 border border-white/10 rounded-2xl p-4 text-center space-y-3">
                         <span class="text-xs text-indigo-300 uppercase font-semibold tracking-wider block">20 Xonali Maxsus ID</span>
-                        <code id="accountIdValue" class="block font-mono text-lg font-bold text-emerald-300 tracking-wider break-all select-all">{{ account_id }}</code>
-                        <button type="button" id="copyAccountId" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-2.5 px-4 rounded-xl transition flex items-center justify-center gap-2 shadow-md">
-                            <i class="fa-solid fa-copy"></i> ID-dan Nusxa Olish
+                        <button type="button" id="copyAccountId" data-account-id="{{ account_id }}" class="block w-full font-mono text-lg font-bold text-emerald-300 tracking-wider rounded-xl py-2 transition hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-emerald-300/70" title="Bosib ID-dan nusxa oling" aria-label="Yashirilgan maxsus ID-ni nusxalash">
+                            •••• •••• •••• •••• ••••
                         </button>
+                        <span class="block text-[11px] text-indigo-200/70">ID yashirilgan · nusxalash uchun bosing</span>
                     </div>
                     <p id="accountIdCopyStatus" class="text-xs text-emerald-300 text-center min-h-4 font-medium" aria-live="polite"></p>
                     {% endif %}
@@ -1465,15 +2045,12 @@
 
         if (copyAccountIdBtn) {
             copyAccountIdBtn.addEventListener('click', () => {
-                const val = document.getElementById('accountIdValue').innerText.trim();
-                copyText(val, 'Maxsus ID nusxalandi!');
+                copyText(copyAccountIdBtn.dataset.accountId, 'Maxsus ID nusxalandi!');
             });
         }
         if (copyNavIdBtn) {
             copyNavIdBtn.addEventListener('click', () => {
-                const fullText = copyNavIdBtn.innerText;
-                const idVal = fullText.replace(/[^0-9]/g, '');
-                copyText(idVal, 'Maxsus ID nusxalandi!');
+                copyText(copyNavIdBtn.dataset.accountId, 'Maxsus ID nusxalandi!');
             });
         }
 

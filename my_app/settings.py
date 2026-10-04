@@ -23,9 +23,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-(=7=c1#j&fcy$1mjp)a=at^hf68cej!n00h^8#ajexi3_qlelg'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
+
 
 ALLOWED_HOSTS = ["*"]
+
+
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 DATA_UPLOAD_MAX_MEMORY_SIZE = 64 * 1024 * 1024
@@ -51,6 +54,7 @@ ASGI_APPLICATION = 'my_app.asgi.application'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -164,3 +168,10 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 CSRF_TRUSTED_ORIGINS = [
     'https://masofa-production.up.railway.app',
 ]
+
+
+
+
+
+
+STATIC_ROOT = BASE_DIR / 'staticfiles'
