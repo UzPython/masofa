@@ -853,6 +853,209 @@
             </div>
         </div>
 
+        <section class="grid grid-cols-1 xl:grid-cols-[1.5fr_0.9fr] gap-6">
+            <div class="bg-white border border-slate-200 rounded-3xl shadow-sm p-5 md:p-6">
+                <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-600">Smart activity</p>
+                        <h3 class="mt-1 text-lg font-bold text-slate-800">Realtime monitoring stream</h3>
+                    </div>
+                    <label class="relative block w-full max-w-xs">
+                        <span class="sr-only">Activity filter</span>
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input id="activitySearch" type="search" placeholder="Qidiruv: kompyuter, domen, buyruq..." class="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-xs text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100">
+                    </label>
+                </div>
+
+                <div id="activityStream" class="mt-5 space-y-3">
+                    {% if warnings or app_warnings or commands %}
+                        {% for warning in warnings|slice:":4" %}
+                        <div class="activity-item flex items-start justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50/70 p-3" data-search="{{ warning.computer_name }} {{ warning.domain }} warning">
+                            <div class="flex gap-3">
+                                <div class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
+                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                </div>
+                                <div>
+                                    <p class="font-bold text-sm text-rose-900">Bloklangan sayt urinishi</p>
+                                    <p class="text-xs text-rose-700">{{ warning.computer_name }} · {{ warning.domain }}</p>
+                                </div>
+                            </div>
+                            <span class="text-[11px] text-slate-500 whitespace-nowrap">{{ warning.timestamp|date:"H:i:s d-M" }}</span>
+                        </div>
+                        {% endfor %}
+
+                        {% for warning in app_warnings|slice:":3" %}
+                        <div class="activity-item flex items-start justify-between gap-3 rounded-2xl border border-orange-200 bg-orange-50/70 p-3" data-search="{{ warning.computer_name }} {{ warning.app_name }} app warning">
+                            <div class="flex gap-3">
+                                <div class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600">
+                                    <i class="fa-solid fa-desktop"></i>
+                                </div>
+                                <div>
+                                    <p class="font-bold text-sm text-orange-900">Dastur taqiqlangan</p>
+                                    <p class="text-xs text-orange-700">{{ warning.computer_name }} · {{ warning.app_name }}</p>
+                                </div>
+                            </div>
+                            <span class="text-[11px] text-slate-500 whitespace-nowrap">{{ warning.timestamp|date:"H:i:s d-M" }}</span>
+                        </div>
+                        {% endfor %}
+
+                        {% for cmd in commands|slice:":3" %}
+                        <div class="activity-item flex items-start justify-between gap-3 rounded-2xl border border-indigo-200 bg-indigo-50/60 p-3" data-search="{{ cmd.command_text }} command">
+                            <div class="flex gap-3">
+                                <div class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600">
+                                    <i class="fa-solid fa-terminal"></i>
+                                </div>
+                                <div>
+                                    <p class="font-bold text-sm text-indigo-900">Masofaviy buyruq</p>
+                                    <p class="font-mono text-xs text-indigo-700">{{ cmd.command_text }}</p>
+                                </div>
+                            </div>
+                            <span class="text-[11px] text-slate-500 whitespace-nowrap">{{ cmd.created_at|date:"H:i:s d-M" }}</span>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                            Hozircha faoliyat yo'q. Yangi kompyuter yoki buyruq yaratilganda bu yerda ko'rinadi.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="bg-white border border-slate-200 rounded-3xl shadow-sm p-5 md:p-6">
+                <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-600">Security pulse</p>
+                <h3 class="mt-1 text-lg font-bold text-slate-800">Risk overview</h3>
+
+                <div class="mt-5 space-y-3">
+                    <div class="flex items-center justify-between rounded-2xl bg-indigo-50 p-3 border border-indigo-100">
+                        <div>
+                            <p class="text-xs text-indigo-700">Ulangan kompyuterlar</p>
+                            <p class="text-xl font-bold text-indigo-900">{{ total_computers|default:0 }}</p>
+                        </div>
+                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white">
+                            <i class="fa-solid fa-desktop"></i>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between rounded-2xl bg-emerald-50 p-3 border border-emerald-100">
+                        <div>
+                            <p class="text-xs text-emerald-700">Online holat</p>
+                            <p class="text-xl font-bold text-emerald-900">{{ online_computers|default:0 }}</p>
+                        </div>
+                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white">
+                            <i class="fa-solid fa-signal"></i>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between rounded-2xl bg-rose-50 p-3 border border-rose-100">
+                        <div>
+                            <p class="text-xs text-rose-700">Xavfsizlik ogohlantirishlari</p>
+                            <p class="text-xl font-bold text-rose-900">{{ total_warnings|default:0 }}</p>
+                        </div>
+                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-600 text-white">
+                            <i class="fa-solid fa-shield-virus"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <p class="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Recommended action</p>
+                    <p class="mt-2 text-sm text-slate-700">
+                        {% if total_warnings > 0 %}
+                            Qora ro'yxatdagi saytlar va bloklangan dasturlarni tekshiring. Riskni pasaytirish uchun tezkor filtrni yangilang.
+                        {% else %}
+                            Hozirda xavfsizlik holati barqaror. Monitoringni saqlab qoling va yangi qo'shilgan saytlarni doimiy nazorat qiling.
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+            <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                        <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-600">Smart policy</p>
+                        <h3 class="mt-1 text-lg font-bold text-slate-800">Bulk site control</h3>
+                    </div>
+                    <a href="{% url 'export_policy_csv' %}{% if search_query %}?q={{ search_query|urlencode }}{% endif %}" class="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">
+                        <i class="fa-solid fa-file-export"></i>
+                        <span>CSV export</span>
+                    </a>
+                </div>
+
+                <form method="get" action="" class="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+                    <label class="relative block">
+                        <span class="sr-only">Qidiruv</span>
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="search" name="q" value="{{ search_query|default:'' }}" placeholder="Domen yoki dastur qidiring..." class="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2.5 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100">
+                    </label>
+                    <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700">
+                        <i class="fa-solid fa-filter"></i>
+                        <span>Filtrlash</span>
+                    </button>
+                </form>
+
+                <form method="post" class="mt-5 space-y-4">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="bulk_policy">
+                    <div>
+                        <label for="bulkDomains" class="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Domenlar ro'yxati</label>
+                        <textarea id="bulkDomains" name="bulk_domains" rows="5" class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100" placeholder="youtube.com&#10;instagram.com&#10;facebook.com">{{ request.POST.bulk_domains|default:'' }}</textarea>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-3">
+                        <button type="submit" name="policy_action" value="block" class="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-500">
+                            <i class="fa-solid fa-ban"></i>
+                            <span>Qora ro'yxat</span>
+                        </button>
+                        <button type="submit" name="policy_action" value="allow" class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500">
+                            <i class="fa-solid fa-shield-check"></i>
+                            <span>Oq ro'yxat</span>
+                        </button>
+                        <select name="policy_preset" class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100">
+                            <option value="custom">Maxsus</option>
+                            <option value="social">Ijtimoiy tarmoq</option>
+                            <option value="work">Ish foydasi</option>
+                            <option value="gaming">Gaming</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+
+            <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-600">Rapid summary</p>
+                <div class="mt-4 space-y-3">
+                    <div class="flex items-center justify-between rounded-2xl bg-emerald-50 p-3 border border-emerald-100">
+                        <div>
+                            <p class="text-xs text-emerald-700">Oq domenlar</p>
+                            <p class="text-xl font-bold text-emerald-900">{{ total_allowed_sites|default:0 }}</p>
+                        </div>
+                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white">
+                            <i class="fa-solid fa-check"></i>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between rounded-2xl bg-rose-50 p-3 border border-rose-100">
+                        <div>
+                            <p class="text-xs text-rose-700">Qora domenlar</p>
+                            <p class="text-xl font-bold text-rose-900">{{ total_blocked_sites|default:0 }}</p>
+                        </div>
+                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-600 text-white">
+                            <i class="fa-solid fa-times"></i>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between rounded-2xl bg-violet-50 p-3 border border-violet-100">
+                        <div>
+                            <p class="text-xs text-violet-700">Bloklangan dasturlar</p>
+                            <p class="text-xl font-bold text-violet-900">{{ total_blocked_apps|default:0 }}</p>
+                        </div>
+                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600 text-white">
+                            <i class="fa-solid fa-laptop"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- TABLAR NAVIGATSIYASI (TAB HEADERS) -->
         <div class="dashboard-tabs bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap gap-1.5">
             <button type="button" class="tab-btn active inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition duration-150 bg-indigo-600 text-white shadow-sm" data-tab="tab-screen">
@@ -1802,6 +2005,18 @@
         themeToggleButton.addEventListener('click', () => {
             setTheme(!document.documentElement.classList.contains('theme-dark'));
         });
+
+        const activitySearch = document.getElementById('activitySearch');
+        if (activitySearch) {
+            activitySearch.addEventListener('input', () => {
+                const query = activitySearch.value.trim().toLowerCase();
+                document.querySelectorAll('.activity-item').forEach(item => {
+                    const haystack = (item.dataset.search || item.textContent || '').toLowerCase();
+                    const isMatch = !query || haystack.includes(query);
+                    item.style.display = isMatch ? '' : 'none';
+                });
+            });
+        }
 
         // 2. TABLARNI ALMASHTIRISH (TAB SWITCHING)
         function switchTab(tabId) {

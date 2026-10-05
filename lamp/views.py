@@ -52,6 +52,32 @@ def normalize_app_name(value):
     return value
 
 
+def parse_policy_domains(value):
+    domains = []
+    seen = set()
+    for raw_line in str(value or '').splitlines():
+        for item in raw_line.replace(',', ' ').replace(';', ' ').split():
+            domain = normalize_domain(item)
+            if domain and domain not in seen:
+                seen.add(domain)
+                domains.append(domain)
+    return domains
+
+
+def apply_policy_domains(user, domains, is_blocked):
+    added = 0
+    for domain in domains:
+        SiteRule.objects.filter(user=user, domain=domain).exclude(is_blocked=is_blocked).delete()
+        rule, created = SiteRule.objects.get_or_create(
+            user=user,
+            domain=domain,
+            is_blocked=is_blocked,
+        )
+        if created:
+            added += 1
+    return added
+
+
 def is_blocked_domain(candidate, blocked_domain):
     candidate = normalize_domain(candidate)
     blocked_domain = normalize_domain(blocked_domain)
@@ -247,6 +273,8 @@ def index_view(request):
         last_seen__lt=stale_cutoff,
     ).update(is_online=False, status_text='Offline')
 
+    search_query = (request.GET.get('q') or '').strip()
+
     if request.method == "POST":
         form_type = request.POST.get("form_type")
 
@@ -258,9 +286,33 @@ def index_view(request):
                     command_text=command_text.strip()
                 )
                 messages.success(request, 'Buyruq kompyuterga yuborildi.')
+        elif form_type == "bulk_policy":
+            policy_action = (request.POST.get("policy_action") or "block").lower()
+            preset = (request.POST.get("policy_preset") or "custom").lower()
+            raw_domains = request.POST.get("bulk_domains") or ""
+
+            preset_map = {
+                'social': ['facebook.com', 'instagram.com', 'x.com', 'twitter.com', 'tiktok.com', 'youtube.com'],
+                'work': ['google.com', 'office.com', 'docs.google.com', 'drive.google.com'],
+                'gaming': ['steamcommunity.com', 'discord.com', 'twitch.tv', 'epicgames.com'],
+            }
+
+            if preset in preset_map and not raw_domains.strip():
+                domains = preset_map[preset]
+            else:
+                domains = parse_policy_domains(raw_domains)
+
+            if not domains:
+                messages.warning(request, 'Bitta ham domen kiritilmadi. Iltimos, domen yoki urllarni kiriting.')
+            else:
+                is_blocked = policy_action == 'block'
+                added = apply_policy_domains(request.user, domains, is_blocked)
+                label = 'qora ro\'yxatga' if is_blocked else 'oq ro\'yxatga'
+                messages.success(request, f'{len(domains)} ta domen {label} qo\'shildi ({added} tasi yangi).')
         elif form_type == "allowed_site":
             domain = normalize_domain(request.POST.get("domain"))
             if domain:
+                SiteRule.objects.filter(user=request.user, domain=domain).exclude(is_blocked=False).delete()
                 SiteRule.objects.get_or_create(
                     user=request.user,
                     domain=domain,
@@ -270,6 +322,7 @@ def index_view(request):
         elif form_type == "blocked_site":
             domain = normalize_domain(request.POST.get("domain"))
             if domain:
+                SiteRule.objects.filter(user=request.user, domain=domain).exclude(is_blocked=True).delete()
                 SiteRule.objects.get_or_create(
                     user=request.user,
                     domain=domain,
@@ -353,6 +406,24 @@ def index_view(request):
         Q(owner=request.user) | Q(shared_with=request.user)
     ).distinct().order_by('name')
 
+    if search_query:
+        allowed_sites = allowed_sites.filter(domain__icontains=search_query)
+        blocked_sites = blocked_sites.filter(domain__icontains=search_query)
+        blocked_apps = blocked_apps.filter(name__icontains=search_query)
+        warnings = warnings.filter(
+            Q(domain__icontains=search_query) |
+            Q(computer_name__icontains=search_query) |
+            Q(url__icontains=search_query)
+        )
+        app_warnings = app_warnings.filter(
+            Q(app_name__icontains=search_query) |
+            Q(computer_name__icontains=search_query)
+        )
+        commands = commands.filter(
+            Q(command_text__icontains=search_query) |
+            Q(computer_name__icontains=search_query)
+        )
+
     if not computers.exists():
         import socket
         hostname = socket.gethostname() or "Asosiy Kompyuter"
@@ -408,6 +479,7 @@ def index_view(request):
         'own_computers': own_computers,
         'user_profile': user_profile,
         'account_id': getattr(user_profile, 'account_id', None),
+        'search_query': search_query,
         'total_computers': total_computers,
         'online_computers': online_computers,
         'total_commands': total_commands,
@@ -418,6 +490,33 @@ def index_view(request):
         'total_app_warnings': total_app_warnings,
     }
     return render(request, 'index.html', context)
+
+
+@login_required(login_url='login')
+def export_policy_csv(request):
+    search_query = (request.GET.get('q') or '').strip()
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="masofa_policy_{request.user.username}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['Type', 'Value', 'Created At'])
+
+    allowed_sites = SiteRule.objects.filter(user=request.user, is_blocked=False)
+    blocked_sites = SiteRule.objects.filter(user=request.user, is_blocked=True)
+    blocked_apps = BlockedApp.objects.filter(user=request.user)
+
+    if search_query:
+        allowed_sites = allowed_sites.filter(domain__icontains=search_query)
+        blocked_sites = blocked_sites.filter(domain__icontains=search_query)
+        blocked_apps = blocked_apps.filter(name__icontains=search_query)
+
+    for site in allowed_sites.order_by('domain'):
+        writer.writerow(['Allowed domain', site.domain, site.created_at.isoformat()])
+    for site in blocked_sites.order_by('domain'):
+        writer.writerow(['Blocked domain', site.domain, site.created_at.isoformat()])
+    for app in blocked_apps.order_by('name'):
+        writer.writerow(['Blocked app', app.name, app.created_at.isoformat()])
+
+    return response
 
 
 @login_required(login_url='login')

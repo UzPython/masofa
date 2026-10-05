@@ -17,6 +17,7 @@ from .views import (
     download_agent_script,
     export_warnings_csv,
     export_commands_csv,
+    export_policy_csv,
     ajax_send_command,
     ajax_command_status,
     upload_command_transfer,
@@ -47,6 +48,7 @@ urlpatterns = [
     path('app-warnings/clear/', clear_app_warnings, name='clear_app_warnings'),
     path('warnings/export-csv/', export_warnings_csv, name='export_warnings_csv'),
     path('commands/export-csv/', export_commands_csv, name='export_commands_csv'),
+    path('policy/export-csv/', export_policy_csv, name='export_policy_csv'),
     path('agent/download-bat/', download_agent_bat, name='download_agent_bat'),
     path('agent/script/', download_agent_script, name='download_agent_script'),
 
