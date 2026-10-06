@@ -313,18 +313,22 @@ async def monitor_blocked_access(agent_id: str, server_url=None, owner_id=None):
 
             title = await asyncio.to_thread(check_active_window)
             if title:
-                def get_blocked():
+                def get_blocked_data():
                     req = urllib.request.Request(api_url, headers={'User-Agent': 'MasofaAgent/3.0'})
                     with urllib.request.urlopen(req, timeout=5) as resp:
                         if resp.status == 200:
-                            return json.loads(resp.read().decode('utf-8')).get('blocked_domains', [])
-                    return []
+                            data = json.loads(resp.read().decode('utf-8'))
+                            return data.get('blocked_domains', []), data.get('silent_domains', [])
+                    return [], []
 
-                blocked_domains = await asyncio.to_thread(get_blocked)
-                for domain in blocked_domains:
+                blocked_domains, silent_domains = await asyncio.to_thread(get_blocked_data)
+                silent_set = {normalize_domain_name(d) for d in silent_domains if normalize_domain_name(d)}
+                monitored_domains = list(blocked_domains) + list(silent_domains)
+                for domain in monitored_domains:
                     norm_domain = normalize_domain_name(domain)
                     base_name = norm_domain.split('.')[0] if '.' in norm_domain else norm_domain
                     if norm_domain and (norm_domain in title or (len(base_name) > 3 and base_name in title)):
+                        is_silent = norm_domain in silent_set
                         def post_warning():
                             payload = {
                                 "computer_name": agent_id,
@@ -342,21 +346,24 @@ async def monitor_blocked_access(agent_id: str, server_url=None, owner_id=None):
                             with urllib.request.urlopen(req, timeout=5):
                                 pass
                         await asyncio.to_thread(post_warning)
-                        print(f"[!] [FILTR] Taqiqlangan saytga urinish aniqlandi va yopildi: {domain}")
-
-                        def kill_browsers():
-                            try:
-                                import ctypes
-                                ctypes.windll.user32.MessageBoxW(0, f"Diqqat! '{domain}' saytiga kirish taqiqlangan va brauzer yopildi!", "Masofa RMM - Xavfsizlik Ogohlantirishi", 0x30 | 0x40000)
-                            except Exception:
-                                pass
-                            try:
-                                subprocess.run("taskkill /f /im chrome.exe", shell=True, capture_output=True)
-                                subprocess.run("taskkill /f /im msedge.exe", shell=True, capture_output=True)
-                                subprocess.run("taskkill /f /im firefox.exe", shell=True, capture_output=True)
-                            except Exception as error:
-                                print(f"[!] [FILTR] Taqiqlangan sayt nazoratida xatolik: {error}")
-                        await asyncio.to_thread(kill_browsers)
+                        
+                        if is_silent:
+                            print(f"[*] [FILTR] Jim kuzatilayotgan saytga kirildi (bloklanmadi): {domain}")
+                        else:
+                            print(f"[!] [FILTR] Taqiqlangan saytga urinish aniqlandi va yopildi: {domain}")
+                            def kill_browsers():
+                                try:
+                                    import ctypes
+                                    ctypes.windll.user32.MessageBoxW(0, f"Diqqat! '{domain}' saytiga kirish taqiqlangan va brauzer yopildi!", "Masofa RMM - Xavfsizlik Ogohlantirishi", 0x30 | 0x40000)
+                                except Exception:
+                                    pass
+                                try:
+                                    subprocess.run("taskkill /f /im chrome.exe", shell=True, capture_output=True)
+                                    subprocess.run("taskkill /f /im msedge.exe", shell=True, capture_output=True)
+                                    subprocess.run("taskkill /f /im firefox.exe", shell=True, capture_output=True)
+                                except Exception as error:
+                                    print(f"[!] [FILTR] Taqiqlangan sayt nazoratida xatolik: {error}")
+                            await asyncio.to_thread(kill_browsers)
                         break
         except Exception:
             pass

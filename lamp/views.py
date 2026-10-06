@@ -64,7 +64,7 @@ def parse_policy_domains(value):
     return domains
 
 
-def apply_policy_domains(user, domains, is_blocked):
+def apply_policy_domains(user, domains, is_blocked, is_silent=False):
     added = 0
     for domain in domains:
         SiteRule.objects.filter(user=user, domain=domain).exclude(is_blocked=is_blocked).delete()
@@ -72,7 +72,12 @@ def apply_policy_domains(user, domains, is_blocked):
             user=user,
             domain=domain,
             is_blocked=is_blocked,
+            defaults={'is_silent': is_silent}
         )
+        if not created:
+            if rule.is_silent != is_silent:
+                rule.is_silent = is_silent
+                rule.save(update_fields=['is_silent'])
         if created:
             added += 1
     return added
@@ -289,6 +294,7 @@ def index_view(request):
         elif form_type == "bulk_policy":
             policy_action = (request.POST.get("policy_action") or "block").lower()
             preset = (request.POST.get("policy_preset") or "custom").lower()
+            silent_block = request.POST.get("silent_block") == "1"
             raw_domains = request.POST.get("bulk_domains") or ""
 
             preset_map = {
@@ -306,9 +312,10 @@ def index_view(request):
                 messages.warning(request, 'Bitta ham domen kiritilmadi. Iltimos, domen yoki urllarni kiriting.')
             else:
                 is_blocked = policy_action == 'block'
-                added = apply_policy_domains(request.user, domains, is_blocked)
+                added = apply_policy_domains(request.user, domains, is_blocked, is_silent=silent_block)
                 label = 'qora ro\'yxatga' if is_blocked else 'oq ro\'yxatga'
-                messages.success(request, f'{len(domains)} ta domen {label} qo\'shildi ({added} tasi yangi).')
+                silent_label = ' (jim/bildirmaslik)' if silent_block else ''
+                messages.success(request, f'{len(domains)} ta domen {label} qo\'shildi{silent_label} ({added} tasi yangi).')
         elif form_type == "allowed_site":
             domain = normalize_domain(request.POST.get("domain"))
             if domain:
@@ -1041,7 +1048,8 @@ class WhitelistAPIView(APIView):
         profile = UserProfile.objects.filter(account_id=str(owner_id)).first() if owner_id else None
         rules = SiteRule.objects.filter(user__in=shared_policy_user_ids(profile.user)) if profile else SiteRule.objects.none()
         allowed = list(rules.filter(is_blocked=False).values_list('domain', flat=True))
-        blocked = list(rules.filter(is_blocked=True).values_list('domain', flat=True))
+        blocked = list(rules.filter(is_blocked=True, is_silent=False).values_list('domain', flat=True))
+        silent_domains = list(rules.filter(is_blocked=True, is_silent=True).values_list('domain', flat=True))
         
         if owner_id:
             blocked_apps_qs = BlockedApp.objects.none()
@@ -1059,6 +1067,7 @@ class WhitelistAPIView(APIView):
         return Response({
             "allowed_domains": allowed,
             "blocked_domains": blocked,
+            "silent_domains": silent_domains,
             "blocked_apps": blocked_apps,
             "allowed_count": len(allowed),
             "blocked_count": len(blocked),
@@ -1116,6 +1125,20 @@ def export_warnings_csv(request):
 
 
 @login_required(login_url='login')
+def export_warnings_json(request):
+    """Barcha xavfsizlik ogohlantirishlarini JSON formatida yuklab olish"""
+    warnings_data = list(SiteWarning.objects.all().order_by('-timestamp').values(
+        'id', 'computer_name', 'domain', 'url', 'timestamp'
+    ))
+    for w in warnings_data:
+        if 'timestamp' in w and w['timestamp']:
+            w['timestamp'] = w['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
+    response = JsonResponse({'warnings': warnings_data}, json_dumps_params={'ensure_ascii': False, 'indent': 2})
+    response['Content-Disposition'] = 'attachment; filename="site_warnings.json"'
+    return response
+
+
+@login_required(login_url='login')
 def export_commands_csv(request):
     """Buyruqlar tarixini CSV formatida yuklab olish"""
     response = HttpResponse(content_type='text/csv; charset=utf-8')
@@ -1132,6 +1155,20 @@ def export_commands_csv(request):
             c.output_result or '',
             c.created_at.strftime('%Y-%m-%d %H:%M:%S')
         ])
+    return response
+
+
+@login_required(login_url='login')
+def export_commands_json(request):
+    """Buyruqlar tarixini JSON formatida yuklab olish"""
+    commands_data = list(Command.objects.filter(user=request.user).order_by('-created_at').values(
+        'id', 'command_text', 'computer_name', 'is_executed', 'output_result', 'created_at'
+    ))
+    for c in commands_data:
+        if 'created_at' in c and c['created_at']:
+            c['created_at'] = c['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+    response = JsonResponse({'commands': commands_data}, json_dumps_params={'ensure_ascii': False, 'indent': 2})
+    response['Content-Disposition'] = 'attachment; filename="commands_history.json"'
     return response
 
 

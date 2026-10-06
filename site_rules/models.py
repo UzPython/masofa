@@ -6,6 +6,7 @@ class SiteRule(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='site_rules')
     domain = models.CharField(max_length=255)
     is_blocked = models.BooleanField()
+    is_silent = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
