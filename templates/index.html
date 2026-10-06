@@ -2018,6 +2018,30 @@
             });
         }
 
+        // Yangi xavfsizlik ogohlantirishlarini avtomatik tekshirib borish
+        let lastSiteWarningCount = {{ warnings|length|default:0 }};
+        let lastAppWarningCount = {{ app_warnings|length|default:0 }};
+        setInterval(async () => {
+            try {
+                const res = await fetch("{% url 'api_latest_warnings' %}");
+                if (res.ok) {
+                    const data = await res.json();
+                    const totalSite = data.site_warnings.length;
+                    const totalApp = data.app_warnings.length;
+                    if (totalSite > lastSiteWarningCount) {
+                        const latest = data.site_warnings[0];
+                        showToast(`⚠️ Diqqat! ${latest.computer_name} taqiqlangan saytga kirdi: ${latest.domain}`, 'fa-triangle-exclamation text-rose-400');
+                        lastSiteWarningCount = totalSite;
+                    }
+                    if (totalApp > lastAppWarningCount) {
+                        const latest = data.app_warnings[0];
+                        showToast(`⚠️ Diqqat! ${latest.computer_name} taqiqlangan dasturni ochdi: ${latest.app_name}`, 'fa-triangle-exclamation text-amber-400');
+                        lastAppWarningCount = totalApp;
+                    }
+                }
+            } catch (e) {}
+        }, 4000);
+
         // 2. TABLARNI ALMASHTIRISH (TAB SWITCHING)
         function switchTab(tabId) {
             tabButtons.forEach(btn => {

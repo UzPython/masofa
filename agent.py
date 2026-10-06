@@ -346,6 +346,11 @@ async def monitor_blocked_access(agent_id: str, server_url=None, owner_id=None):
 
                         def kill_browsers():
                             try:
+                                import ctypes
+                                ctypes.windll.user32.MessageBoxW(0, f"Diqqat! '{domain}' saytiga kirish taqiqlangan va brauzer yopildi!", "Masofa RMM - Xavfsizlik Ogohlantirishi", 0x30 | 0x40000)
+                            except Exception:
+                                pass
+                            try:
                                 subprocess.run("taskkill /f /im chrome.exe", shell=True, capture_output=True)
                                 subprocess.run("taskkill /f /im msedge.exe", shell=True, capture_output=True)
                                 subprocess.run("taskkill /f /im firefox.exe", shell=True, capture_output=True)
@@ -398,6 +403,11 @@ async def monitor_blocked_apps(agent_id: str, server_url=None, owner_id=None):
                     norm_app = app.lower().strip()
                     if norm_app in running_procs:
                         def kill_and_warn():
+                            try:
+                                import ctypes
+                                ctypes.windll.user32.MessageBoxW(0, f"Diqqat! '{norm_app}' dasturini ishga tushirish taqiqlangan va yopildi!", "Masofa RMM - Xavfsizlik Ogohlantirishi", 0x30 | 0x40000)
+                            except Exception:
+                                pass
                             try:
                                 subprocess.run(f'taskkill /f /im "{norm_app}"', shell=True, capture_output=True)
                             except Exception:

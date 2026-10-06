@@ -1133,3 +1133,18 @@ def export_commands_csv(request):
             c.created_at.strftime('%Y-%m-%d %H:%M:%S')
         ])
     return response
+
+
+@login_required(login_url='login')
+def api_latest_warnings(request):
+    """So'nggi xavfsizlik va dastur ogohlantirishlarini JSON formatida qaytarish"""
+    user_filter = shared_policy_user_ids(request.user)
+    site_warnings = SiteWarning.objects.filter(user__in=user_filter).order_by('-timestamp')[:5] if user_filter else SiteWarning.objects.none()
+    app_warnings = AppWarning.objects.filter(user__in=user_filter).order_by('-timestamp')[:5] if user_filter else AppWarning.objects.none()
+    
+    data = {
+        "site_warnings": [{"computer_name": w.computer_name, "domain": w.domain, "timestamp": w.timestamp.strftime('%H:%M:%S')} for w in site_warnings],
+        "app_warnings": [{"computer_name": w.computer_name, "app_name": w.app_name, "timestamp": w.timestamp.strftime('%H:%M:%S')} for w in app_warnings],
+    }
+    return JsonResponse(data)
+

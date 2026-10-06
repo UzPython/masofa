@@ -18,6 +18,7 @@ from .views import (
     export_warnings_csv,
     export_commands_csv,
     export_policy_csv,
+    api_latest_warnings,
     ajax_send_command,
     ajax_command_status,
     upload_command_transfer,
@@ -51,6 +52,7 @@ urlpatterns = [
     path('policy/export-csv/', export_policy_csv, name='export_policy_csv'),
     path('agent/download-bat/', download_agent_bat, name='download_agent_bat'),
     path('agent/script/', download_agent_script, name='download_agent_script'),
+    path('api/latest-warnings/', api_latest_warnings, name='api_latest_warnings'),
 
     # AJAX orqali tezkor terminal buyruqlari
     path('api/ajax-send-command/', ajax_send_command, name='ajax_send_command'),
