@@ -138,6 +138,8 @@ class AgentSetupTests(TestCase):
         self.assertIn('masofa_212.bat', response['Content-Disposition'])
         bat_content = response.content.decode()
         self.assertIn('set "PS_ENCODED_FILE=%TEMP%', bat_content)
+        self.assertIn('net session', bat_content)
+        self.assertIn('RunAs', bat_content)
         self.assertIn('[scriptblock]::Create($script)', bat_content)
         self.assertIn('if not "%INSTALL_ERROR%"=="0" (', bat_content)
         setup_lines = [

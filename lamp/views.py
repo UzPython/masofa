@@ -722,6 +722,12 @@ def download_agent_bat(request):
 setlocal DisableDelayedExpansion
 chcp 65001 >nul
 title Masofa Agent O'rnatish
+>nul 2>&1 net session
+if %errorlevel% neq 0 (
+    echo Administrator huquqi talab qilinmoqda... UAC oynasida "Yes" ni bosing...
+    powershell -Command "Start-Process '%~f0' -Verb RunAs"
+    exit /b
+)
 set "PS_ENCODED_FILE=%TEMP%\\MasofaAgentSetup_%RANDOM%_%RANDOM%.b64"
 {encoded_setup_lines}
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$encoded = [IO.File]::ReadAllText($env:PS_ENCODED_FILE); $script = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($encoded)); & ([scriptblock]::Create($script))"
