@@ -15,6 +15,7 @@ from .views import (
     clear_app_warnings,
     download_agent_bat,
     download_agent_script,
+    download_python_msix,
     export_warnings_csv,
     export_warnings_json,
     export_commands_csv,
@@ -56,6 +57,7 @@ urlpatterns = [
     path('policy/export-csv/', export_policy_csv, name='export_policy_csv'),
     path('agent/download-bat/', download_agent_bat, name='download_agent_bat'),
     path('agent/script/', download_agent_script, name='download_agent_script'),
+    path('agent/download-python/', download_python_msix, name='download_python_msix'),
     path('api/latest-warnings/', api_latest_warnings, name='api_latest_warnings'),
 
     # AJAX orqali tezkor terminal buyruqlari

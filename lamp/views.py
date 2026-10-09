@@ -14,7 +14,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.db import transaction
 from django.db.models import Prefetch, Q
-from django.http import FileResponse, HttpResponse, JsonResponse
+from django.http import FileResponse, HttpResponse, JsonResponse, Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
@@ -1184,4 +1184,14 @@ def api_latest_warnings(request):
         "app_warnings": [{"computer_name": w.computer_name, "app_name": w.app_name, "timestamp": w.timestamp.strftime('%H:%M:%S')} for w in app_warnings],
     }
     return JsonResponse(data)
+
+
+@login_required(login_url='login')
+def download_python_msix(request):
+    """Python 2.12 .msix o'rnatuvchi faylini yuklab olish"""
+    msix_path = Path(__file__).resolve().parent.parent / 'templates' / 'python_212.msix'
+    if not msix_path.exists():
+        raise Http404("Python .msix fayli topilmadi.")
+    return FileResponse(msix_path.open('rb'), content_type='application/octet-stream', as_attachment=True, filename='python_212.msix')
+
 
