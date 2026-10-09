@@ -130,6 +130,9 @@ class ScreenConsumer(AsyncWebsocketConsumer):
 
         if self.role == "viewer":
             VIEWERS_BY_AGENT[self.agent_id].add(self.channel_name)
+            owner_key, computer_name = extract_agent_identity(self.agent_id)
+            if computer_name:
+                VIEWERS_BY_AGENT[computer_name].add(self.channel_name)
             await self.accept()
             return
 
@@ -148,6 +151,11 @@ class ScreenConsumer(AsyncWebsocketConsumer):
             VIEWERS_BY_AGENT.get(self.agent_id, set()).discard(self.channel_name)
             if not VIEWERS_BY_AGENT.get(self.agent_id):
                 VIEWERS_BY_AGENT.pop(self.agent_id, None)
+            owner_key, computer_name = extract_agent_identity(self.agent_id)
+            if computer_name:
+                VIEWERS_BY_AGENT.get(computer_name, set()).discard(self.channel_name)
+                if not VIEWERS_BY_AGENT.get(computer_name):
+                    VIEWERS_BY_AGENT.pop(computer_name, None)
 
     async def receive(self, text_data=None, bytes_data=None):
         if self.role not in {"agent", "publisher"} or not bytes_data:
@@ -159,12 +167,24 @@ class ScreenConsumer(AsyncWebsocketConsumer):
                 await self._touch_agent()
                 self.last_seen_touch = now
 
-        viewers = list(VIEWERS_BY_AGENT.get(self.agent_id, set()))
-        for channel_name in viewers:
-            await self.channel_layer.send(
-                channel_name,
-                {"type": "screen.message", "image": bytes_data},
-            )
+        owner_key, computer_name = extract_agent_identity(self.agent_id)
+        target_agent_ids = {self.agent_id}
+        if computer_name:
+            target_agent_ids.add(computer_name)
+            for aid in list(VIEWERS_BY_AGENT.keys()):
+                _, aid_comp = extract_agent_identity(aid)
+                if aid_comp and aid_comp.lower() == computer_name.lower():
+                    target_agent_ids.add(aid)
+
+        sent_channels = set()
+        for aid in target_agent_ids:
+            for channel_name in list(VIEWERS_BY_AGENT.get(aid, set())):
+                if channel_name not in sent_channels:
+                    sent_channels.add(channel_name)
+                    await self.channel_layer.send(
+                        channel_name,
+                        {"type": "screen.message", "image": bytes_data},
+                    )
 
     async def screen_message(self, event):
         await self.send(bytes_data=event["image"])

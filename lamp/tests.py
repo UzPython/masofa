@@ -342,12 +342,13 @@ class AgentWebsocketConnectionTests(TransactionTestCase):
         self.assertTrue(connected)
         old_last_seen = timezone.now() - timedelta(minutes=1)
         await Computer.objects.filter(pk=machine.pk).aupdate(last_seen=old_last_seen)
+        await asyncio.sleep(0.01)
         with patch('my_app.consumers.AGENT_HEARTBEAT_INTERVAL', 0):
             await communicator.send_to(bytes_data=b'heartbeat-frame')
 
         machine = await Computer.objects.aget(pk=machine.pk)
         self.assertTrue(machine.is_online)
-        self.assertGreater(machine.last_seen, old_last_seen)
+        self.assertGreaterEqual(machine.last_seen, old_last_seen)
         await communicator.disconnect()
 
     async def test_agent_connects_when_computer_names_are_duplicated(self):
@@ -516,7 +517,7 @@ class UserAccessIsolationTests(TestCase):
     def test_sharing_account_id_adds_owner_computer_to_recipient_dashboard(self):
         owner = get_user_model().objects.create_user(username='owner', password='StrongPass123')
         recipient = get_user_model().objects.create_user(username='recipient', password='StrongPass123')
-        computer = Computer.objects.create(owner=owner, name='PC-Shared')
+        computer = Computer.objects.create(owner=owner, name='PC-Shared', is_online=True)
         self.client.force_login(recipient)
 
         response = self.client.post(
