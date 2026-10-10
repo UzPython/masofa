@@ -452,6 +452,11 @@ def index_view(request):
     shared_accounts = SharedAccount.objects.filter(recipient=request.user).select_related('owner').prefetch_related(
         Prefetch(
             'owner__owned_computers',
+            queryset=Computer.objects.order_by('name', 'pk'),
+            to_attr='all_owned_computers',
+        ),
+        Prefetch(
+            'owner__owned_computers',
             queryset=Computer.objects.filter(is_online=True).order_by('name', 'pk'),
             to_attr='online_owned_computers',
         )

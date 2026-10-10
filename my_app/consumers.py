@@ -133,6 +133,9 @@ class ScreenConsumer(AsyncWebsocketConsumer):
             owner_key, computer_name = extract_agent_identity(self.agent_id)
             if computer_name:
                 VIEWERS_BY_AGENT[computer_name].add(self.channel_name)
+            if owner_key is not None:
+                VIEWERS_BY_AGENT[str(owner_key)].add(self.channel_name)
+                VIEWERS_BY_AGENT[f"user-{owner_key}"].add(self.channel_name)
             await self.accept()
             return
 
@@ -156,6 +159,9 @@ class ScreenConsumer(AsyncWebsocketConsumer):
                 VIEWERS_BY_AGENT.get(computer_name, set()).discard(self.channel_name)
                 if not VIEWERS_BY_AGENT.get(computer_name):
                     VIEWERS_BY_AGENT.pop(computer_name, None)
+            if owner_key is not None:
+                VIEWERS_BY_AGENT.get(str(owner_key), set()).discard(self.channel_name)
+                VIEWERS_BY_AGENT.get(f"user-{owner_key}", set()).discard(self.channel_name)
 
     async def receive(self, text_data=None, bytes_data=None):
         if self.role not in {"agent", "publisher"} or not bytes_data:
@@ -174,6 +180,13 @@ class ScreenConsumer(AsyncWebsocketConsumer):
             for aid in list(VIEWERS_BY_AGENT.keys()):
                 _, aid_comp = extract_agent_identity(aid)
                 if aid_comp and aid_comp.lower() == computer_name.lower():
+                    target_agent_ids.add(aid)
+        if owner_key is not None:
+            target_agent_ids.add(str(owner_key))
+            target_agent_ids.add(f"user-{owner_key}")
+            for aid in list(VIEWERS_BY_AGENT.keys()):
+                aid_owner, _ = extract_agent_identity(aid)
+                if aid_owner == owner_key or aid == str(owner_key) or aid == f"user-{owner_key}":
                     target_agent_ids.add(aid)
 
         sent_channels = set()

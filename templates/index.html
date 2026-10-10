@@ -1187,6 +1187,11 @@
                             <i class="fa-solid fa-user-astronaut text-[10px]"></i>
                             {{ shared_account.display_name }}
                         </button>
+                        {% elif shared_account.owner.all_owned_computers %}
+                        <button type="button" data-computer="{{ shared_account.owner.all_owned_computers.0.name }}" data-online="{{ shared_account.owner.all_owned_computers.0.is_online|yesno:'true,false' }}" data-computer-id="{{ shared_account.owner.profile.account_id }}__{{ shared_account.owner.all_owned_computers.0.name }}" data-stream-id="{{ shared_account.owner.profile.account_id }}__{{ shared_account.owner.all_owned_computers.0.name }}" data-stream-name="{{ shared_account.display_name }}" class="quick-stream-chip shared-screen-select inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-950/60 text-indigo-300 border border-indigo-600/40 hover:bg-indigo-900/60 transition">
+                            <i class="fa-solid fa-user-astronaut text-[10px]"></i>
+                            {{ shared_account.display_name }}
+                        </button>
                         {% else %}
                         <button type="button" data-stream-id="user-{{ shared_account.owner.profile.account_id }}" data-stream-name="{{ shared_account.display_name }}" class="quick-stream-chip shared-screen-select inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-950/60 text-indigo-300 border border-indigo-600/40 hover:bg-indigo-900/60 transition">
                             <i class="fa-solid fa-user-astronaut text-[10px]"></i>
@@ -1820,6 +1825,10 @@
                                      </button>
                                      {% if shared_account.owner.online_owned_computers %}
                                     <button type="button" data-computer="{{ shared_account.owner.online_owned_computers.0.name }}" data-online="true" data-computer-id="{{ shared_account.owner.profile.account_id }}__{{ shared_account.owner.online_owned_computers.0.name }}" data-stream-id="{{ shared_account.owner.profile.account_id }}__{{ shared_account.owner.online_owned_computers.0.name }}" data-stream-name="{{ shared_account.display_name }}" class="watch-shared-btn shared-screen-select bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm">
+                                        <i class="fa-solid fa-eye"></i> Ekranni ko'rish
+                                    </button>
+                                    {% elif shared_account.owner.all_owned_computers %}
+                                    <button type="button" data-computer="{{ shared_account.owner.all_owned_computers.0.name }}" data-online="{{ shared_account.owner.all_owned_computers.0.is_online|yesno:'true,false' }}" data-computer-id="{{ shared_account.owner.profile.account_id }}__{{ shared_account.owner.all_owned_computers.0.name }}" data-stream-id="{{ shared_account.owner.profile.account_id }}__{{ shared_account.owner.all_owned_computers.0.name }}" data-stream-name="{{ shared_account.display_name }}" class="watch-shared-btn shared-screen-select bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm">
                                         <i class="fa-solid fa-eye"></i> Ekranni ko'rish
                                     </button>
                                     {% else %}
